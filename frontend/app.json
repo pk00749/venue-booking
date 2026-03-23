@@ -1,0 +1,38 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/index/index",
+    "pages/venue/detail",
+    "pages/booking/create",
+    "pages/my/bookings",
+    "pages/my/profile",
+    "pages/owner/venues",
+    "pages/owner/bookings",
+    "pages/owner/venue-edit/venue-edit"
+  ],
+  "window": {
+    "navigationBarTitleText": "场地预订",
+    "navigationBarBackgroundColor": "#4A90D9",
+    "navigationBarTextStyle": "white"
+  },
+  "tabBar": {
+    "color": "#999",
+    "selectedColor": "#4A90D9",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "assets/home.png",
+        "selectedIconPath": "assets/home-active.png"
+      },
+      {
+        "pagePath": "pages/my/bookings",
+        "text": "我的",
+        "iconPath": "assets/user.png",
+        "selectedIconPath": "assets/user-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

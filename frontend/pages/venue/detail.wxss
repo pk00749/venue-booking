@@ -1,0 +1,150 @@
+/* pages/venue/detail.wxss */
+.container {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.venue-swiper {
+  height: 400rpx;
+  width: 100%;
+}
+
+.slide-image {
+  width: 100%;
+  height: 100%;
+  background: #eee;
+}
+
+.venue-header {
+  background: #fff;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+}
+
+.venue-name {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.venue-tags {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+
+.tag {
+  font-size: 24rpx;
+  color: #4A90D9;
+  background: rgba(74, 144, 217, 0.1);
+  padding: 6rpx 20rpx;
+  border-radius: 8rpx;
+}
+
+.tag-status {
+  font-size: 24rpx;
+  color: #52c41a;
+  background: rgba(82, 196, 26, 0.1);
+  padding: 6rpx 20rpx;
+  border-radius: 8rpx;
+}
+
+.venue-address {
+  font-size: 28rpx;
+  color: #666;
+  margin-top: 16rpx;
+  display: block;
+}
+
+.venue-desc {
+  font-size: 28rpx;
+  color: #999;
+  margin-top: 12rpx;
+  display: block;
+}
+
+.venue-time {
+  font-size: 28rpx;
+  color: #666;
+  margin-top: 12rpx;
+}
+
+.section {
+  background: #fff;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.date-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f5f5f5;
+  padding: 20rpx 30rpx;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.slots-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20rpx;
+}
+
+.slot-item {
+  background: #f5f5f5;
+  border-radius: 12rpx;
+  padding: 24rpx 16rpx;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.slot-disabled {
+  opacity: 0.5;
+  background: #eee;
+}
+
+.slot-time {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.slot-price {
+  font-size: 26rpx;
+  color: #4A90D9;
+}
+
+.slot-status-text {
+  font-size: 24rpx;
+  color: #52c41a;
+}
+
+.slot-disabled .slot-status-text {
+  color: #999;
+}
+
+.empty-slots {
+  text-align: center;
+  padding: 60rpx 0;
+  color: #999;
+  font-size: 28rpx;
+}
+
+.loading {
+  text-align: center;
+  padding: 200rpx 0;
+  color: #999;
+  font-size: 28rpx;
+}

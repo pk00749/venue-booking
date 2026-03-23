@@ -1,0 +1,35 @@
+<!-- pages/owner/bookings.wxml -->
+<view class="container">
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+  <view wx:elif="{{bookings.length === 0}}" class="empty">
+    <text>暂无待审核预订</text>
+  </view>
+  <view wx:else class="booking-list">
+    <view wx:for="{{bookings}}" wx:key="_id" class="booking-card">
+      <view class="booking-info">
+        <text class="booking-venue">{{item.venue_id}}</text>
+        <text class="booking-slot">{{item.slot_id}}</text>
+      </view>
+      <view class="booking-detail">
+        <text>联系人: {{item.contact_name}}</text>
+        <text>电话: {{item.contact_phone}}</text>
+        <text>总价: ¥{{item.total_price}}</text>
+      </view>
+      <view class="booking-actions">
+        <button 
+          class="reject-btn" 
+          size="mini"
+          data-id="{{item._id}}"
+          bindtap="handleReject"
+        >拒绝</button>
+        <button 
+          class="approve-btn" 
+          type="primary" 
+          size="mini"
+          data-id="{{item._id}}"
+          bindtap="handleApprove"
+        >批准</button>
+      </view>
+    </view>
+  </view>
+</view>

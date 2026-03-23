@@ -1,0 +1,55 @@
+<!-- pages/index/index.wxml -->
+<view class="container">
+  <!-- 搜索栏 -->
+  <view class="search-bar">
+    <input 
+      class="search-input" 
+      placeholder="搜索场地名称" 
+      bindinput="onSearch"
+      value="{{searchKey}}"
+    />
+  </view>
+
+  <!-- 类型筛选 -->
+  <scroll-view class="type-filter" scroll-x>
+    <view class="type-list">
+      <view 
+        wx:for="{{types}}" 
+        wx:key="value"
+        class="type-item {{selectedType === item.value ? 'active' : ''}}"
+        bindtap="onTypeTap"
+        data-type="{{item.value}}"
+      >
+        {{item.label}}
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 场地列表 -->
+  <scroll-view class="venue-list" scroll-y>
+    <view wx:if="{{loading}}" class="loading">加载中...</view>
+    
+    <view wx:elif="{{venues.length === 0}}" class="empty">
+      <text>暂无场地</text>
+    </view>
+
+    <view 
+      wx:for="{{venues}}" 
+      wx:key="_id"
+      class="venue-card"
+      bindtap="goToVenue"
+      data-id="{{item._id}}"
+    >
+      <image 
+        class="venue-img" 
+        src="{{item.images[0] || '/assets/venue-placeholder.png'}}" 
+        mode="aspectFill"
+      />
+      <view class="venue-info">
+        <text class="venue-name">{{item.name}}</text>
+        <text class="venue-type">{{item.type}}</text>
+        <text class="venue-address">{{item.address}}</text>
+      </view>
+    </view>
+  </scroll-view>
+</view>

@@ -1,0 +1,55 @@
+<view class="container">
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+  <view wx:elif="{{venues.length === 0}}" class="empty">
+    <text>暂无场地</text>
+    <text class="empty-hint">点击下方按钮创建第一个场地</text>
+  </view>
+  <view wx:else class="venue-list">
+    <view wx:for="{{venues}}" wx:key="_id" class="venue-card">
+      <image
+        class="venue-img"
+        src="{{item.images[0] || '/assets/venue-placeholder.png'}}"
+        mode="aspectFill"
+        bindtap="goToEditVenue"
+        data-id="{{item._id}}"
+      />
+      <view class="venue-info">
+        <view class="venue-header">
+          <view class="venue-title-row">
+            <text class="venue-name">{{item.name}}</text>
+            <view
+              class="status-badge {{item.status}}"
+              bindtap="toggleStatus"
+              data-id="{{item._id}}"
+              data-status="{{item.status}}"
+            >
+              {{item.status === 'active' ? '营业中' : '已停业'}}
+            </view>
+          </view>
+          <text class="venue-address">{{item.address}}</text>
+          <view class="venue-meta-row">
+            <text class="venue-type">{{item.typeText || item.type}}</text>
+            <text class="venue-time">
+              {{item.open_time.start || '08:00'}} - {{item.open_time.end || '22:00'}}
+            </text>
+          </view>
+        </view>
+        <view class="venue-actions">
+          <view
+            class="action-btn edit-btn"
+            bindtap="goToEditVenue"
+            data-id="{{item._id}}"
+          >编辑</view>
+          <view
+            class="action-btn delete-btn"
+            bindtap="deleteVenue"
+            data-id="{{item._id}}"
+          >删除</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 浮动创建按钮 -->
+  <view class="fab" bindtap="goToCreateVenue">+</view>
+</view>

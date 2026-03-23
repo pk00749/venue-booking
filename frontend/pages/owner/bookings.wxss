@@ -1,0 +1,75 @@
+/* pages/owner/bookings.wxss */
+.container {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding: 20rpx;
+}
+
+.loading, .empty {
+  text-align: center;
+  padding: 200rpx 0;
+  color: #999;
+  font-size: 28rpx;
+}
+
+.booking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.booking-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
+}
+
+.booking-info {
+  margin-bottom: 16rpx;
+}
+
+.booking-venue {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+}
+
+.booking-slot {
+  font-size: 26rpx;
+  color: #666;
+  display: block;
+  margin-top: 8rpx;
+}
+
+.booking-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 20rpx;
+}
+
+.booking-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 20rpx;
+}
+
+.reject-btn {
+  background: #fff;
+  color: #ff4d4f;
+  border: 1rpx solid #ff4d4f;
+  border-radius: 32rpx;
+  font-size: 26rpx;
+}
+
+.approve-btn {
+  background: #52c41a;
+  color: #fff;
+  border: none;
+  border-radius: 32rpx;
+  font-size: 26rpx;
+}
