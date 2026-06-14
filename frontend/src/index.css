@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Instagram 风格 base 层 — 白底、grotesque sans、软阴影 */
+@layer base {
+  html, body, #root { background-color: #FAFAFA; }
+  body {
+    font-family: theme('fontFamily.sans');
+    color: theme('colors.ink.800');
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection { background: theme('colors.ink.800'); color: #fff; }
+  h1, h2, h3, h4 { font-family: theme('fontFamily.display'); letter-spacing: -0.02em; }
+  .font-display { font-family: theme('fontFamily.display'); }
+  .font-mono    { font-family: theme('fontFamily.mono'); }
+  .font-numeric { font-family: theme('fontFamily.numeric'); font-feature-settings: "tnum" 1; }
+}
+
+@layer components {
+  /* 通用 eyebrow（IG 风的 mono 小字） */
+  .ig-eyebrow {
+    font-family: theme('fontFamily.mono');
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: theme('colors.ink.500');
+  }
+  /* IG 招牌渐变（写死 hex，theme() 在 .css 直接规则里不展开） */
+  .ig-stripe {
+    background-image: linear-gradient(45deg, #FEDA75 0%, #FA7E1E 25%, #D62976 50%, #962FBF 75%, #4F5BD5 100%);
+  }
+  /* Story ring 渐变 — 同上，备用 */
+  .ig-ring {
+    background-image: linear-gradient(45deg, #FEDA75, #FA7E1E, #D62976, #962FBF, #4F5BD5);
+  }
+  /* 1px hairline 分割线 */
+  .ig-hairline {
+    border-top: 1px solid #DBDBDB;
+  }
+  /* Story 圆形头像 */
+  .ig-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    font-size: 1.875rem;
+    user-select: none;
+  }
+}
