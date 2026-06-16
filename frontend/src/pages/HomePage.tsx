@@ -1,8 +1,6 @@
-// 首页 —— Instagram 风 + Emoji 故事圈
-//   1) Story circles（IG 顶部圆头像，三种运动各一）
-//   2) 克制 hero：标题 + 副标 + IG 渐变 CTA + 计数 chip
-//   3) 三张运动卡：白底圆角 16 + emoji 圆形头像（彩色径向渐变背景）+ 描述 + CTA
-//   4) 底部 IG hairline + 状态条
+// 首页 —— Instagram 风
+//   1) 克制 hero：标题 + 副标 + IG 渐变 CTA + 计数 chip
+//   2) 三张运动卡：白底圆角 16 + emoji 圆形头像（彩色径向渐变背景）+ 描述 + CTA
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
@@ -61,33 +59,6 @@ const SPORT_VISUAL: Record<SportType, SportVisual> = {
   volleyball:   { emoji:"🏐", zh:"排球",   glow:"bg-football-glow", ring:"ring-football", accent:"text-football-dark", light:"bg-football-light", mono:"VOLLEYBALL",   blurb:{zh:"六人组队。",en:"6-a-side squads."} },
   other:        { emoji:"🎯", zh:"其他",   glow:"bg-ink-200",       ring:"ring-ink-500",  accent:"text-ink-700",       light:"bg-ink-100",       mono:"OTHER",        blurb:{zh:"等你提名。",en:"More coming soon."} },
 };
-
-function StoryCircle({
-  sport, href, count, label,
-}: { sport: SportType; href: string; count: number; label: string }) {
-  const v = SPORT_VISUAL[sport];
-  return (
-    <Link
-      to={href}
-      className="group flex flex-col items-center gap-2 w-[88px] flex-shrink-0"
-    >
-      {/* IG 渐变环 + 中心圆形头像 */}
-      <div className="relative h-[72px] w-[72px] rounded-full ig-stripe p-[3px] transition-transform group-hover:scale-105">
-        <div className={`flex h-full w-full items-center justify-center rounded-full ${v.glow} text-[36px] shadow-softSm`}>
-          {v.emoji}
-        </div>
-      </div>
-      <div className="text-center">
-        <div className="text-[13px] font-semibold text-ink-800 leading-tight">
-          {label}
-        </div>
-        <div className="text-[11px] text-ink-500 mt-0.5">
-          {count} <span className="text-ink-500/80">courts</span>
-        </div>
-      </div>
-    </Link>
-  );
-}
 
 function SportCard({
   sport, count, href, locale,
@@ -203,21 +174,6 @@ export function HomePage() {
         </div>
 
         <div className="md:col-span-4 flex flex-col items-stretch md:items-end gap-3">
-          <Link
-            to="/venues?sport=squash"
-            className="inline-flex items-center justify-center gap-2 rounded-xl ig-stripe text-white px-5 py-3 text-[14px] font-semibold shadow-softSm hover:opacity-95 hover:-translate-y-0.5 transition-all"
-          >
-            {t("home.ctaBookNow")}
-            <span aria-hidden>→</span>
-          </Link>
-          {!user && (
-            <Link
-              to="/become-owner"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-ink-300 bg-canvas-50 px-5 py-3 text-[14px] font-semibold text-ink-800 hover:bg-ink-100 transition"
-            >
-              {t("home.ctaOwner")}
-            </Link>
-          )}
           <div className="flex flex-wrap items-center gap-2 text-[12px] text-ink-500">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-canvas-200 px-2.5 py-1">
               <span className="h-1.5 w-1.5 rounded-full bg-squash" />
@@ -228,27 +184,6 @@ export function HomePage() {
               03 {locale === "zh-CN" ? "类运动" : "sports"}
             </span>
           </div>
-        </div>
-      </section>
-
-      {/* 故事圈 Stories：横向 IG 头像 */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-display text-[20px] font-bold text-ink-800">
-            {locale === "zh-CN" ? "选一个开打" : "Pick your game"}
-          </h2>
-          <span className="ig-eyebrow">03 / 03</span>
-        </div>
-        <div className="flex items-start gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-          {FEATURED_SPORTS.map((sport) => (
-            <StoryCircle
-              key={sport}
-              sport={sport}
-              href={`/venues?sport=${sport}`}
-              count={counts[sport] ?? 0}
-              label={SPORT_VISUAL[sport].zh}
-            />
-          ))}
         </div>
       </section>
 
@@ -265,33 +200,19 @@ export function HomePage() {
             />
           ))}
         </div>
-      </section>
-
-      {/* IG 风的 1px hairline 收尾 */}
-      <section className="ig-hairline pt-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full ig-stripe text-white text-[14px] font-bold">
-              {locale === "zh-CN" ? "约" : "Y"}
-            </div>
-            <div>
-              <p className="text-[13px] font-semibold text-ink-800">
-                {locale === "zh-CN" ? "今天就开一局" : "Open a game today"}
-              </p>
-              <p className="text-[11px] text-ink-500">
-                {locale === "zh-CN"
-                  ? "本周新增 6 场可订场次"
-                  : "6 new slots opened this week"}
-              </p>
-            </div>
+        {!user && (
+          <div className="mt-8 flex flex-col items-center gap-2">
+            <Link
+              to="/become-owner"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-ink-300 bg-canvas-50 px-5 py-3 text-[14px] font-semibold text-ink-800 hover:bg-ink-100 transition"
+            >
+              {t("home.ctaOwner")}
+            </Link>
+            <p className="text-[12px] text-ink-500">
+              {locale === "zh-CN" ? "手上有场？入驻即上线" : "Own a court? List it in minutes."}
+            </p>
           </div>
-          <Link
-            to="/venues"
-            className="text-[12px] font-semibold text-ink-700 hover:text-ink-800"
-          >
-            {locale === "zh-CN" ? "查看全部场地 →" : "See all venues →"}
-          </Link>
-        </div>
+        )}
       </section>
     </div>
   );

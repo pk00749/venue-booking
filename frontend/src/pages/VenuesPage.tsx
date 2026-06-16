@@ -4,13 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { format, isToday, isTomorrow, addDays } from "date-fns";
-import { listVenues, listNextAvailableDates } from "@/features/venues/api";
+import { listVenues, listNextAvailableDates, parseCity, parseDistrict } from "@/features/venues/api";
 import { EmptyState, Skeleton } from "@/components/ui";
 import { useUi } from "@/lib/store";
 import { formatMoney } from "@/lib/format";
-import { FEATURED_SPORTS } from "@/lib/mock-data";
 import { SPORT_TYPES, type SportType } from "@/lib/types";
 import clsx from "clsx";
+import { useEffect, useMemo } from "react";
 
 const SPORT_VISUAL: Record<SportType, { emoji: string; light: string; glow: string; mono: string }> = {
   squash:     { emoji: "🏸", light: "bg-squash-light",   glow: "bg-squash-glow",   mono: "SQUASH"     },
@@ -22,6 +22,38 @@ const SPORT_VISUAL: Record<SportType, { emoji: string; light: string; glow: stri
   volleyball:   { emoji: "🏐", light: "bg-football-light", glow: "bg-football-glow", mono: "VOLLEYBALL" },
   other:        { emoji: "🎯", light: "bg-ink-100",        glow: "bg-ink-200",       mono: "OTHER"      },
 };
+
+function SelectPill({
+  value,
+  onChange,
+  ariaLabel,
+  disabled,
+  children,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  ariaLabel: string;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      className={clsx(
+        "rounded-full border border-ink-300 bg-canvas-50 px-3 py-1.5 pr-7 text-[12px] font-semibold text-ink-700 transition",
+        "hover:border-ink-500 hover:text-ink-800 focus:border-ink-500 focus:outline-none",
+        "appearance-none bg-no-repeat bg-[length:12px_12px] bg-[right_10px_center]",
+        "bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22%23475569%22><path d=%22M5.5 7.5l4.5 5 4.5-5z%22/></svg>')]",
+        disabled && "opacity-50 cursor-not-allowed"
+      )}
+    >
+      {children}
+    </select>
+  );
+}
 
 function dateChipLabel(iso: string, t: (k: string) => string) {
   const d = new Date(iso);
@@ -43,22 +75,70 @@ export function VenuesPage() {
       ? (sportParam as SportType)
       : "all";
   const keyword = params.get("q") ?? "";
+  const cityParam = params.get("city") ?? "";
+  const districtParam = params.get("district") ?? "";
 
-  const setSport = (s: SportType | "all") => {
-    const next = new URLSearchParams(params);
-    if (s === "all") next.delete("sport"); else next.set("sport", s);
-    setParams(next, { replace: true });
-  };
   const setKeyword = (k: string) => {
     const next = new URLSearchParams(params);
     if (k) next.set("q", k); else next.delete("q");
     setParams(next, { replace: true });
   };
+  const setCity = (c: string) => {
+    const next = new URLSearchParams(params);
+    if (c) next.set("city", c); else next.delete("city");
+    next.delete("district"); // 切换城市时清空区县
+    setParams(next, { replace: true });
+  };
+  const setDistrict = (d: string) => {
+    const next = new URLSearchParams(params);
+    if (d) next.set("district", d); else next.delete("district");
+    setParams(next, { replace: true });
+  };
+
+  // 用于派生筛选选项的「同运动下」完整列表（不含 city / district 过滤）
+  const { data: sportVenues = [] } = useQuery({
+    queryKey: ["venues.options", sport],
+    queryFn: () => listVenues({ sportType: sport }),
+  });
 
   const { data: venues = [], isLoading } = useQuery({
-    queryKey: ["venues", sport, keyword],
-    queryFn: () => listVenues({ sportType: sport, keyword }),
+    queryKey: ["venues", sport, cityParam, districtParam, keyword],
+    queryFn: () =>
+      listVenues({
+        sportType: sport,
+        city: cityParam || undefined,
+        district: districtParam || undefined,
+        keyword,
+      }),
   });
+
+  const cities = useMemo(() => {
+    const set = new Set<string>();
+    for (const v of sportVenues) {
+      const c = parseCity(v.address);
+      if (c) set.add(c);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+  }, [sportVenues]);
+
+  const districts = useMemo(() => {
+    const set = new Set<string>();
+    for (const v of sportVenues) {
+      if (cityParam && parseCity(v.address) !== cityParam) continue;
+      const d = parseDistrict(v.address);
+      if (d) set.add(d);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+  }, [sportVenues, cityParam]);
+
+  // 当可用区县列表里找不到当前 district 时（切了城市），把 district 清掉
+  useEffect(() => {
+    if (districtParam && districts.length > 0 && !districts.includes(districtParam)) {
+      const next = new URLSearchParams(params);
+      next.delete("district");
+      setParams(next, { replace: true });
+    }
+  }, [districtParam, districts, params, setParams]);
 
   const { data: datesByVenue = {} } = useQuery({
     queryKey: ["venues.nextDates", venues.map((v) => v.id).join("|")],
@@ -118,42 +198,35 @@ export function VenuesPage() {
 
       <p className="max-w-xl text-[14px] text-ink-600">{t("venues.subtitle")}</p>
 
-      {/* 过滤条：白底圆角 chips */}
+      {/* 过滤条：城市 / 区县 + 名称搜索（运动由 URL ?sport= 控制） */}
       <div className="flex flex-wrap items-center gap-2 border-y border-ink-300 py-3">
-        {FEATURED_SPORTS.map((s) => {
-          const active = sport === s;
-          return (
-            <button
-              key={s}
-              onClick={() => setSport(s)}
-              className={clsx(
-                "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition border",
-                active
-                  ? "border-transparent text-white ig-stripe"
-                  : "border-ink-300 text-ink-700 hover:border-ink-500 hover:text-ink-800 bg-canvas-50"
-              )}
-            >
-              <span className="text-[14px]">{SPORT_VISUAL[s].emoji}</span>
-              {t(`sport.${s}`)}
-            </button>
-          );
-        })}
-        <button
-          onClick={() => setSport("all")}
-          className={clsx(
-            "rounded-full px-3 py-1.5 text-[12px] font-semibold transition border",
-            sport === "all"
-              ? "border-transparent text-white ig-stripe"
-              : "border-ink-300 text-ink-700 hover:border-ink-500 hover:text-ink-800 bg-canvas-50"
-          )}
+        <SelectPill
+          value={cityParam}
+          onChange={setCity}
+          ariaLabel={t("venues.city")}
+          disabled={cities.length === 0}
         >
-          ALL
-        </button>
+          <option value="">{t("venues.cityAll")}</option>
+          {cities.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </SelectPill>
+        <SelectPill
+          value={districtParam}
+          onChange={setDistrict}
+          ariaLabel={t("venues.district")}
+          disabled={!cityParam || districts.length === 0}
+        >
+          <option value="">{t("venues.districtAll")}</option>
+          {districts.map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </SelectPill>
         <input
           type="search"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
-          placeholder={t("venues.searchPlaceholder")}
+          placeholder={t("venues.searchPlaceholder") /* "搜索场馆名称" */}
           className="ml-auto w-full max-w-xs rounded-full border border-ink-300 bg-canvas-50 px-4 py-1.5 text-[12px] text-ink-800 placeholder:text-ink-500 focus:border-ink-500 focus:outline-none transition"
         />
       </div>

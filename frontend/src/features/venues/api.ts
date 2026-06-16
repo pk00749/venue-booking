@@ -9,12 +9,22 @@ const wait = <T,>(value: T, ms = 150): Promise<T> =>
 export interface VenueFilters {
   sportType?: SportType | "all";
   keyword?: string;
+  city?: string;
+  district?: string;
 }
 
 export async function listVenues(filters: VenueFilters = {}): Promise<Venue[]> {
   let rows = store.venues.filter((v) => v.status === "active");
   if (filters.sportType && filters.sportType !== "all") {
     rows = rows.filter((v) => v.sportType === filters.sportType);
+  }
+  if (filters.city) {
+    const c = filters.city;
+    rows = rows.filter((v) => parseCity(v.address) === c);
+  }
+  if (filters.district) {
+    const d = filters.district;
+    rows = rows.filter((v) => parseDistrict(v.address) === d);
   }
   if (filters.keyword) {
     const k = filters.keyword.toLowerCase();
@@ -23,6 +33,17 @@ export async function listVenues(filters: VenueFilters = {}): Promise<Venue[]> {
     );
   }
   return wait(rows);
+}
+
+// 简易地址解析：地址模板形如 "上海市浦东新区前滩大道 18 号 B1"
+// —— Supabase 接入后应改为 venue.city / venue.district 字段，此处仅 mock 兜底。
+export function parseCity(address: string): string {
+  const m = address.match(/^(上海市|北京市|广州市|深圳市|杭州市|成都市|重庆市|武汉市|南京市|苏州市|西安市|天津市)/);
+  return m ? m[1] : "";
+}
+export function parseDistrict(address: string): string {
+  const m = address.match(/^(?:上海市|北京市|广州市|深圳市|杭州市|成都市|重庆市|武汉市|南京市|苏州市|西安市|天津市)([\u4e00-\u9fa5]{2,4}区)/);
+  return m ? m[1] : "";
 }
 
 export async function getVenue(id: string): Promise<Venue | null> {
