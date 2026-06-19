@@ -1,4 +1,4 @@
-// 场地详情 —— IG 风延续
+// 场馆详情 —— IG 风延续
 //   1) 头部：左 emoji 圆 + 大软色 art 块；右 eyebrow + sport mono + 标题 + 地址
 //   2) 4 列 stat 条：白底圆角（营业时间 / 容量 / 起价 / ID）
 //   3) 备注：白底 card，空时灰字「无」
@@ -223,10 +223,12 @@ function SlotTile({
   const end = new Date(slot.endsAt);
   const time = `${format(start, "HH:mm")}–${format(end, "HH:mm")}`;
   const fillPct = Math.round((stat.confirmed / stat.capacity) * 100);
-  const disabled = stat.kind === "full" || stat.kind === "blocked";
+  const isPast = start.getTime() < Date.now();
+  const disabled = isPast || stat.kind === "full" || stat.kind === "blocked";
 
-  const ariaLabel =
-    stat.kind === "full"
+  const ariaLabel = isPast
+    ? t("venueDetail.slotExpiredAria", { time })
+    : stat.kind === "full"
       ? t("venueDetail.slotFullAria")
       : stat.kind === "blocked"
         ? t("venueDetail.slotBlockedAria")
@@ -267,7 +269,11 @@ function SlotTile({
         <span className="tracking-wider text-ink-600">
           {stat.confirmed}/{stat.capacity}
         </span>
-        {stat.kind === "full" ? (
+        {isPast ? (
+          <span className="rounded-full border border-canvas-200 bg-canvas-100 px-2 py-0.5 text-[10px] tracking-[0.14em] text-ink-500">
+            {t("venueDetail.slotExpired")}
+          </span>
+        ) : stat.kind === "full" ? (
           <span className="rounded-full bg-ink-800 px-2 py-0.5 text-[10px] tracking-[0.14em] text-white">
             {t("venueDetail.fullyBooked")}
           </span>
@@ -350,14 +356,6 @@ export function VenueDetailPage() {
 
   return (
     <div className="space-y-7 pb-20">
-      {/* 顶部：返回 */}
-      <Link
-        to={`/venues${venue.sportType ? `?sport=${venue.sportType}` : ""}`}
-        className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-500 hover:text-ink-800"
-      >
-        <span aria-hidden>←</span> {t("venueDetail.backToList")}
-      </Link>
-
       <VenueHeader venue={venue} vis={vis} />
 
       <NotesBlock notes={venue.notes} />

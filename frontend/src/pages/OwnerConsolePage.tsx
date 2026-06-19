@@ -1,7 +1,7 @@
 // 场主控制台 —— IG 风
 //   1) 头：eyebrow + display 标题 + 副标
 //   2) 权限不足：白底锁屏 + 跳首页
-//   3) 我的场地：白底 card 列表 + 顶部「+ 新建场地」IG 渐变 chip
+//   3) 我的场馆：白底 card 列表 + 顶部「+ 新建场馆」IG 渐变 chip
 //   4) 待审预订：白底 card 列表 + 行内 批准（IG 渐变）/ 拒绝（squash-light）
 //   5) CreateVenueForm：inputCls 样式 + select 圆角
 import { useState } from "react";

@@ -1,4 +1,4 @@
-// 场地列表 — IG 风：白底圆角卡片，左侧 emoji 头像圆，右侧日期 chip + 容量 + 价格
+// 场馆列表 — IG 风：白底圆角卡片，左侧 emoji 头像圆，右侧日期 chip + 容量 + 价格
 // 过滤条 / 搜索框统一白底圆角；active 状态用 IG 渐变
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { format, isToday, isTomorrow, addDays } from "date-fns";
 import { listVenues, listNextAvailableDates, parseCity, parseDistrict } from "@/features/venues/api";
 import { EmptyState, Skeleton } from "@/components/ui";
+import { PageBottomBar } from "@/components/PageBottomBar";
 import { useUi } from "@/lib/store";
 import { formatMoney } from "@/lib/format";
 import { SPORT_TYPES, type SportType } from "@/lib/types";
@@ -160,15 +161,7 @@ export function VenuesPage() {
   const sportGlow  = sport === "all" ? "ig-stripe" : SPORT_VISUAL[sport].glow;
 
   return (
-    <div className="space-y-7">
-      {/* 顶部：返回 */}
-      <Link
-        to="/"
-        className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-500 hover:text-ink-800"
-      >
-        <span aria-hidden>←</span> {t("venues.backToSports")}
-      </Link>
-
+    <div className="space-y-7 pb-24">
       {/* 头部：emoji 大圆 + 运动名 + 计数 */}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -177,7 +170,7 @@ export function VenuesPage() {
           </div>
           <div>
             <p className="ig-eyebrow">
-              {locale === "zh-CN" ? "运动 · 场地" : "Sport · Venues"}
+              {locale === "zh-CN" ? "运动 · 场馆" : "Sport · Venues"}
             </p>
             <h1 className="font-display text-[40px] font-extrabold leading-none tracking-tighter text-ink-800">
               {sportName}
@@ -187,7 +180,7 @@ export function VenuesPage() {
         <div className="flex items-center gap-2 text-[12px] text-ink-500">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-canvas-200 px-3 py-1">
             <span className="h-1.5 w-1.5 rounded-full bg-football" />
-            {venues.length} {locale === "zh-CN" ? "片场地" : "venues"}
+            {venues.length} {locale === "zh-CN" ? "片场馆" : "venues"}
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-canvas-200 px-3 py-1">
             <span className="h-1.5 w-1.5 rounded-full bg-squash" />
@@ -338,6 +331,17 @@ export function VenuesPage() {
           })}
         </ul>
       )}
+
+      <PageBottomBar
+        leading={
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 rounded-full border border-canvas-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-ink-500 transition hover:border-ink-300 hover:text-ink-800"
+          >
+            <span aria-hidden>←</span> {t("venues.backToSports")}
+          </Link>
+        }
+      />
     </div>
   );
 }

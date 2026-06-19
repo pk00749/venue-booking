@@ -66,7 +66,7 @@ export interface Venue {
   createdAt: string;
   // —— v2 mock 增量字段 ——
   capacity: number;        // 单场可容纳人数
-  notes?: string;          // 场地备注（空时 UI 渲染为「无」）
+  notes?: string;          // 场馆备注（空时 UI 渲染为「无」）
 }
 
 export interface VenueService {

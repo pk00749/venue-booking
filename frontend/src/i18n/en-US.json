@@ -96,11 +96,12 @@
     "slotTaken": "This slot was just booked, please pick another",
     "contactInfo": "Contact",
     "backToVenue": "Back to venue",
-    "phoneInvalid": "Please enter a valid 11-digit phone number"
+    "phoneInvalid": "Please enter a valid 11-digit phone number",
+    "backToSlots": "Back to slots"
   },
   "myBookings": {
     "title": "My bookings",
-    "tabUpcoming": "Booked · not started",
+    "tabUpcoming": "Booked",
     "tabHistory": "Finished",
     "empty": "No bookings yet",
     "cancel": "Cancel",
@@ -283,7 +284,9 @@
     "viewAllDates": "See all dates",
     "bookSlotAria": "Book {{time}}",
     "slotFullAria": "Full, not bookable",
-    "slotBlockedAria": "Unavailable"
+    "slotBlockedAria": "Unavailable",
+    "slotExpired": "Past",
+    "slotExpiredAria": "{{time}} has passed, not bookable"
   },
   "bottomBar": {
     "browseAll": "Browse all",

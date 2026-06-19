@@ -113,7 +113,7 @@ export function EmptyState({
   );
 }
 
-// 运动图标 + 渐变背景：场地卡片/详情页用，零外部图片依赖
+// 运动图标 + 渐变背景：场馆卡片/详情页用，零外部图片依赖
 const SPORT_VISUAL: Record<string, { emoji: string; gradient: string }> = {
   badminton: { emoji: "🏸", gradient: "from-emerald-400 to-teal-500" },
   basketball: { emoji: "🏀", gradient: "from-orange-400 to-rose-500" },

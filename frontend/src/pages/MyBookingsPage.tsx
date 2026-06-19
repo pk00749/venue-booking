@@ -1,5 +1,5 @@
 // 我的预订 —— IG 风
-//   1) 顶部：eyebrow + 大 display 标题 + 找场链接
+//   1) 顶部：eyebrow + 大 display 标题
 //   2) tabs：白底圆角 chips，active IG 渐变 + 白字
 //   3) 列表：白底圆角 card，左 sport mono + venue + 时段，右 status chip + 取消按钮
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -96,17 +96,9 @@ export function MyBookingsPage() {
   return (
     <div className="space-y-6">
       {/* 头 */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="ig-eyebrow">{t("nav.appName")}</p>
-          <h1 className="mt-1 font-display text-[36px] leading-tight text-ink-800">{t("myBookings.title")}</h1>
-        </div>
-        <Link
-          to="/venues"
-          className="ig-stripe inline-flex items-center gap-1.5 rounded-full px-4 py-2 font-mono text-[11px] tracking-[0.16em] text-white shadow-softSm"
-        >
-          {t("home.ctaBrowse")} →
-        </Link>
+      <div>
+        <p className="ig-eyebrow">{t("nav.appName")}</p>
+        <h1 className="mt-1 font-display text-[36px] leading-tight text-ink-800">{t("myBookings.title")}</h1>
       </div>
 
       {/* tabs */}

@@ -350,7 +350,7 @@ export function BookingPage() {
             className="inline-flex items-center gap-1.5 rounded-full border border-canvas-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-ink-500 transition hover:border-ink-300 hover:text-ink-800"
           >
             <span aria-hidden>←</span>
-            <span className="hidden sm:inline">{t("booking.backToVenue")}</span>
+            <span className="hidden sm:inline">{t("booking.backToSlots")}</span>
           </Link>
           <div className="ml-auto flex items-center gap-4">
             <div className="text-right">

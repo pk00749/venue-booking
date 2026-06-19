@@ -27,7 +27,7 @@
 13. [风险与开放问题](#13-风险与开放问题)
 14. [附录：术语表](#14-附录术语表)
 
----
+15. [附录：页面清单（v0.2 当前实现）](#15-附录页面清单v02-当前实现)
 
 ## 1. 背景与目标
 
@@ -744,6 +744,155 @@ client.submit(...)
 | Booking | 用户的一次预订，可包含多个 slot 和多个 service |
 | Hold | slot 在下单页被临时锁定的中间态，10 分钟自动释放 |
 | 入驻申请 | 用户从 user 升级为 owner 的审核流程 |
+
+
+## 15. 附录：页面清单（v0.2 当前实现）
+
+> 本节是 v0.2 阶段的"页面层"快照，记录前端路由与可见页面，**不重复** §4 的需求描述。
+> 范围：v0.2（mock 数据 + 本地内存）阶段；Supabase 接入后部分页面会重构（特别是 owner / admin 的数据源），届时本节需重新对账。
+> 命名口径：前端展示用语已统一为"场馆"（见 §4.x 与 §15.1 mock 阶段备注）；§1.1 v1 历史描述、§2.2 非目标中保留的"场地"是历史文本，不改写。
+
+### 15.1 全局 Shell（与页面强耦合的部分）
+
+- **顶栏**（`components/Layout.tsx`）：白底 sticky nav，左侧 IG 渐变环 + emoji 圆 logo + `app.name` + `app.tagline`；中部 `nav.home` / `nav.venues` / `nav.myBookings`（仅 `user` 角色可见）文字 nav，激活时尾部带 1×1 ink-800 圆点；右侧已登录显示角色 chip + 演示模式角色切换（user / owner / admin，见下）+ `LocaleSwitcher`，未登录显示 `nav.login` / `nav.signup`。
+- **底部条**（`components/PageBottomBar.tsx`）：全局固定的 `leading | info | trailing` 三段式内容区，预订类页（BookingPage、MyBookingsPage 取消态、OwnerConsolePage 待审、AdminPendingBookingsPage 等）通过它承载主操作按钮。
+- **演示模式角色切换**（仅 v0.2 mock 阶段）：顶栏下拉一键切换当前会话角色为 `user` / `owner` / `admin`，配合 `useSession.switchRole` 改写内存中的 `user.role`，**不调任何后端**。Supabase 接入后该控件下线。
+- **i18n**：所有文案来自 `frontend/src/i18n/{zh-CN,en-US}.json`，`react-i18next` 按浏览器语言自动选择，顶部 `LocaleSwitcher` 可手动切换。
+- **守卫**（`App.tsx`）：`RequireAuth` 未登录跳 `/login`；`RequireRole role=...` 角色不符跳 `/`；**不**做"无权限"展示页（避免与 §10 状态机冲突）。
+
+### 15.2 页面清单一览（v0.2 共 14 个页面，4 大类）
+
+| 类型 | 数量 | 页面 |
+| --- | --- | --- |
+| 公开页（Public） | 6 | `HomePage` / `VenuesPage` / `VenueDetailPage` / `LoginPage` / `SignupPage` / `NotFoundPage` |
+| 用户页（User） | 3 | `BookingPage` / `MyBookingsPage` / `BecomeOwnerPage` |
+| 场主页（Owner） | 1 | `OwnerConsolePage` |
+| 管理员页（Admin） | 4 | `AdminDashboardPage` / `AdminOwnerAppsPage` / `AdminSensitiveWordsPage` / `AdminPendingBookingsPage` |
+
+> 备注：v0.2 没有独立的 owner / admin 登录页，统一走 `LoginPage`；mock 阶段不区分鉴权后端。`MyBookingsPage` / `OwnerConsolePage` / 4 个 admin 页直接挂角色路由，未授权时由 `RequireRole` 跳走。
+
+### 15.3 各页面详情
+
+> 每页给出：路径、鉴权、作用、关键功能、核心逻辑、显示信息。**"i18n"** 指本页新增 / 关键 key；带 *(v0.2 mock)* 的行为在 Supabase 接入后会重构。
+
+#### 15.3.1 公开页
+
+**1. `HomePage`（`/`）**
+- 鉴权：公开
+- 作用：IG 风格落地页，引导用户按运动类型浏览场馆
+- 关键功能：刊号 eyebrow + 巨型 hero 标题 + 3 张运动卡 + 底部 PageBottomBar
+- 核心逻辑：`useQuery listVenues` → 按 `sportType` 分组计数 → 卡片点击跳 `/venues?sport=<sport>` *(v0.2 mock)*
+- 显示信息：`app.name` + `app.tagline`、刊号日期（"06.2026"）、城市 + 今日（"上海 · 06.19"）、总片数 chip、3 类运动 chip、3 张卡（emoji + 渐变 glow + 运动名 + mono 标签 + blurb + CTA）
+
+**2. `VenuesPage`（`/venues`）**
+- 鉴权：公开
+- 作用：场馆筛选 / 浏览列表
+- 关键功能：搜索框 + 运动类型 pill 筛选 + 城市 + 区县 SelectPill + 起价排序
+- 核心逻辑：URL search params 同步（`sport` / `q` / `city` / `district`）→ `listVenues` → `listNextAvailableDates` 给每张卡显示最近可订日期 chip *(v0.2 mock)*
+- 显示信息：标题 + 过滤条 + 白底圆角场馆卡（左 emoji 头像 + 右名称 / 地址 / 起价 + 下一可订日 chip + 容量 chip）
+
+**3. `VenueDetailPage`（`/venues/:id`）**
+- 鉴权：公开
+- 作用：场馆详情 + 时段选择
+- 关键功能：头部 + 4 列 stat 条 + 备注 + 7 天日期 tabs + 时段网格（`SlotTile`） + 附加服务列表
+- 核心逻辑：`useQuery getVenue` / `listSlots` / `listVenueServices` → 按 `startsAt` 排序 → `SlotTile` 状态由 `statFor(slot)` 计算 → **过期判断** `start.getTime() < Date.now()` 决定 `isPast`，灰显 + 不可点击 + 状态 chip `venueDetail.slotExpired`（"已过期" / "Past"）→ 点击跳 `/venues/:id/book?date=&slot=`
+- i18n 新增 key：`venueDetail.slotExpired`、`venueDetail.slotExpiredAria`
+- 显示信息：场馆名 + 运动 mono + 地址 + 营业时间 + 容量 + 起价 + ID + 备注 + 日期 tabs（TH 06/18 / 今日 06/19 / 明日 06/20 / SU / MO / TU / WE）+ 时段网格（X / Y + 进度条 + 状态 chip）+ 附加服务（必选项 chip + 价格）
+
+**4. `LoginPage`（`/login`）**
+- 鉴权：公开
+- 作用：mock 登录
+- 关键功能：邮箱 + 密码（默认填 `demo@example.com` / `demo1234`）
+- 核心逻辑：`login` mock → 成功写 `useSession` + 跳 `/`；失败显示 Banner *(v0.2 mock)*
+- 显示信息：IG 渐变圆形 logo + 邮箱 + 密码 + 登录按钮 + 跳注册链接
+
+**5. `SignupPage`（`/signup`）**
+- 鉴权：公开
+- 作用：mock 注册
+- 关键功能：邮箱 + 密码 + 确认密码
+- 核心逻辑：密码一致性校验 + `signup` mock → 自动登录跳 `/` *(v0.2 mock)*
+- 显示信息：同上 + 确认密码字段
+
+**6. `NotFoundPage`（`*`）**
+- 鉴权：公开
+- 作用：404 兜底
+- 核心逻辑：React Router 兜底路由
+- 显示信息：大号"404" + `common.notFoundTitle` + `common.notFoundBody` + 返回首页按钮
+
+#### 15.3.2 用户页（user 角色）
+
+**7. `BookingPage`（`/venues/:id/book`，`RequireAuth`）**
+- 鉴权：需登录（任意角色）
+- 作用：单时段预订确认
+- 关键功能：联系人表单（姓名 + 手机号 11 位校验） + 附加服务多选 + 合计 + 提交
+- 核心逻辑：URL 拿 `date` / `slot` → 校验手机号 11 位正则 → `submitBooking` → 成功跳 `/my-bookings`；slot 已被占时跳回详情页 + 提示 *(v0.2 单时段：mock 阶段只支持单 slot；多 slot / Hold 在 Supabase 阶段实现，对应 §4.3 US-103)*
+- i18n 新增 key：`booking.backToSlots`（"返回时段" / "Back to slots"，底部固定条左按钮使用）
+- 显示信息：场馆名 + 时段摘要（"周X MM/dd HH:mm–HH:mm"）+ 联系人姓名 / 手机号 / 备注 + 附加服务多选（必选项置灰）+ 合计（占位不收款）+ 底部固定条（左 `booking.backToSlots` + 右合计金额 + 提交按钮）
+
+**8. `MyBookingsPage`（`/my-bookings`，`RequireRole role="user"`）**
+- 鉴权：需 user 角色
+- 作用：用户查看自己的预订
+- 关键功能：`myBookings.tabUpcoming`（"已预订"）/ `myBookings.tabPast`（"已结束"）tab 切换 + 取消预订按钮
+- 核心逻辑：`listMyBookings` → 按 tab 过滤 → 取消按钮在 `cancelHours` 范围内可用，超时返回 `too_late` *(v0.2 mock)*
+- 显示信息：tab 切换（chip + IG 渐变 active）+ 预订列表（sport mono + 场馆名 + 时段 + status chip + 取消按钮）+ 空状态文案
+
+**9. `BecomeOwnerPage`（`/become-owner`，`RequireAuth`）**
+- 鉴权：需登录
+- 作用：申请从 user 升级为 owner
+- 关键功能：填写实名 + 身份证号 + 联系手机 → 提交审核
+- 核心逻辑：`listMyOwnerApp` 看是否已申请 → 已申请显示当前状态（pending 显示进度 / approved 显示已是 owner 状态 / rejected 显示原因）→ 未申请显示表单 → `submitOwnerApplication` *(v0.2 mock)*
+- 显示信息：未登录时显示锁屏 + 跳登录；已申请显示状态 card + 拒绝原因；未申请显示 3 字段表单
+
+#### 15.3.3 场主页（owner 角色）
+
+**10. `OwnerConsolePage`（`/owner`，`RequireRole role="owner"`）**
+- 鉴权：需 owner 角色
+- 作用：场主管理自己的场馆和待审预订
+- 关键功能："+ 新建场馆" 按钮 + 我的场馆列表 + 待审预订列表（行内 批准 / 拒绝）
+- 核心逻辑：`listVenuesByOwner` + `listPendingBookingsForOwner` → 权限不足显示锁屏 → 场馆创建走 `createVenue` → 预订审核走 `reviewBooking` *(v0.2 mock)*
+- 显示信息：eyebrow + display 标题 + 新建按钮 + 我的场馆 card 列表（emoji 头像 + 名称 + sport mono + 起价 + 状态）+ 待审预订 card（场馆名 + 时段 + 申请人 + 批准 / 拒绝按钮）
+
+#### 15.3.4 管理员页（admin 角色）
+
+**11. `AdminDashboardPage`（`/admin`，`RequireRole role="admin"`）**
+- 鉴权：需 admin 角色
+- 作用：管理员数据看板
+- 关键功能：9 个 StatCard 网格 + 热门场馆 Top N
+- 核心逻辑：`getDashboardStats`（mock 内存计算）→ 显示 DAU / WAU / MAU / 待审场主 / 待审预订 / 7 天新用户 / 7 天新预订 / 7 天完成预订 / 7 天取消率 *(v0.2 mock：真实聚合由 Edge Function 提供，对应 §8)*
+- 显示信息：标题 + 9 个 stat 卡（emoji + 标签 + 数字 + hint）+ TOP VENUES 列表（序号 + 名称 + 预订数）
+
+**12. `AdminOwnerAppsPage`（`/admin/owners`，`RequireRole role="admin"`）**
+- 鉴权：需 admin 角色
+- 作用：审核场主入驻申请
+- 关键功能：pending / approved / rejected 三个 tab + 行内批准 / 拒绝（拒绝需填原因）
+- 核心逻辑：`listOwnerApps(tab)` + `reviewOwnerApp(id, "approve" | "reject", reason?)` *(v0.2 mock)*
+- 显示信息：tab 切换 + 申请列表（姓名 + 状态 chip + 手机号 + 用户 ID + 批准 / 拒绝按钮）
+
+**13. `AdminSensitiveWordsPage`（`/admin/words`，`RequireRole role="admin"`）**
+- 鉴权：需 admin 角色
+- 作用：敏感词词库管理
+- 关键功能：添加敏感词（词 + 严重程度 `block` / `review`）+ 词表 + 切换激活状态 + 删除
+- 核心逻辑：`listSensitiveWords` + `addSensitiveWord` + `toggleSensitiveWord` + `deleteSensitiveWord` *(v0.2 mock)*
+- 显示信息：添加表单 + 词表（词 + 严重度 chip + 激活 / 停用 chip + 删除按钮）
+
+**14. `AdminPendingBookingsPage`（`/admin/bookings`，`RequireRole role="admin"`）**
+- 鉴权：需 admin 角色
+- 作用：审核需要场主确认的预订（v0.2 mock：所有待审预订都过 admin 视线）
+- 关键功能：行内批准 / 拒绝
+- 核心逻辑：`listAllPendingBookings` + `reviewBooking(id, "confirm" | "reject")` *(v0.2 mock)*
+- 显示信息：标题 + 列表（场馆名 + 时段 + 申请人 + 批准 / 拒绝按钮）；空状态显示 ✨
+
+### 15.4 v0.2 mock 阶段特别说明
+
+- **数据源**：所有 `*Api` 走 `frontend/src/lib/mock-data.ts`（内存数据 + 模拟延迟），**不**调 Supabase；接口形态按 Supabase 风格写，便于后续切换。
+- **登录态**：`useSession`（zustand）存内存中，刷新即重置；`localStorage` 持久化版本在 mock 阶段已可用，Supabase 接入后由 `supabase.auth` 接管。
+- **i18n**：key 集中在 `frontend/src/i18n/zh-CN.json` 与 `en-US.json`，新增 / 删除 key 必须双向同步（AGENTS §5.4）。
+- **本期新增 / 调整的 i18n key**（v0.2 → v0.2.x 之间累积）：
+  - `booking.backToSlots`（新增，替代历史 `backToVenue`）
+  - `venueDetail.slotExpired` / `venueDetail.slotExpiredAria`（新增，"已过期" 状态 + 无障碍标签）
+  - `myBookings.tabUpcoming` 文案由"已预订但没开场"精简为"已预订"
+- **本期移除的 UI 元素**：`MyBookingsPage` 顶部"去找场"按钮、`VenueDetailPage` 顶部"返回场馆列表"链接（由全局 `nav.venues` / 浏览器后退替代，避免与全局 nav 重复）。
+- **本期迁移到 `PageBottomBar` 的元素**：`VenuesPage` 顶部"返回选运动"链接迁到 `PageBottomBar.leading`（同样由全局 `nav.home` / 浏览器后退可替代，避免顶部重复占位）。
 
 ---
 

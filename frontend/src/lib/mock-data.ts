@@ -38,7 +38,7 @@ const seedUsers: Profile[] = [
   { id: "u_admin", email: "admin@example.com", nickname: "平台管理员",   role: "admin", locale: "zh-CN", createdAt: now() },
 ];
 
-// 三类运动示范数据：壁球 4 片 · 足球 3 片 · 篮球 5 片（共 12 块场地）
+// 三类运动示范数据：壁球 4 片 · 足球 3 片 · 篮球 5 片（共 12 块场馆）
 const seedVenues: Venue[] = [
   // 壁球 ——
   {
@@ -161,7 +161,7 @@ const seedServices: VenueService[] = [
   { id: "s_5", venueId: "v_bk_3", name: "电子记分（场）", priceCents: 2000, required: false },
 ];
 
-// 为每个场地预生成今天起 7 天 × 营业时段内的 slot
+// 为每个场馆预生成今天起 7 天 × 营业时段内的 slot
 function genSlotsForVenue(v: Venue): Slot[] {
   const slots: Slot[] = [];
   const today = new Date();

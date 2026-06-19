@@ -1,4 +1,4 @@
-// 场地相关 Mock API —— 后续替换为 supabase.from('venues').select(...)
+// 场馆相关 Mock API —— 后续替换为 supabase.from('venues').select(...)
 import { store, newId, nowIso } from "@/lib/mock-data";
 import { checkSensitive } from "@/lib/sensitive";
 import type { SportType, Venue, VenueService } from "@/lib/types";
@@ -107,8 +107,8 @@ export async function listSlots(venueId: string, dateIso?: string) {
 }
 
 /**
- * 取某个场地接下来 N 个「仍有空位」的可订日期（YYYY-MM-DD）。
- * 用于场地列表的「最近 3 个可订日期」展示。
+ * 取某个场馆接下来 N 个「仍有空位」的可订日期（YYYY-MM-DD）。
+ * 用于场馆列表的「最近 3 个可订日期」展示。
  */
 export async function listNextAvailableDates(venueId: string, n: number): Promise<string[]> {
   const today = new Date();
