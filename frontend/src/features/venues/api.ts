@@ -11,6 +11,7 @@ export interface VenueFilters {
   keyword?: string;
   city?: string;
   district?: string;
+  date?: string; // YYYY-MM-DD; if set, only venues with >=1 free slot on that day
 }
 
 export async function listVenues(filters: VenueFilters = {}): Promise<Venue[]> {
@@ -32,6 +33,10 @@ export async function listVenues(filters: VenueFilters = {}): Promise<Venue[]> {
       (v) => v.name.toLowerCase().includes(k) || v.address.toLowerCase().includes(k)
     );
   }
+  if (filters.date) {
+    const iso = filters.date;
+    rows = rows.filter((v) => hasFreeSlotOnDate(v.id, iso));
+  }
   return wait(rows);
 }
 
@@ -44,6 +49,38 @@ export function parseCity(address: string): string {
 export function parseDistrict(address: string): string {
   const m = address.match(/^(?:上海市|北京市|广州市|深圳市|杭州市|成都市|重庆市|武汉市|南京市|苏州市|西安市|天津市)([\u4e00-\u9fa5]{2,4}区)/);
   return m ? m[1] : "";
+}
+
+// 把 ISO 日期（或任意可被 Date 解析的字符串）规整成 [startMs, endMs) 区间，
+// —— mock 内部用，后续 Supabase 接入后应改为按 date 列直接查 slots。
+function dayBounds(dateLike: string): { start: number; end: number } {
+  const d = new Date(dateLike);
+  d.setHours(0, 0, 0, 0);
+  const next = new Date(d);
+  next.setDate(next.getDate() + 1);
+  return { start: d.getTime(), end: next.getTime() };
+}
+
+export function hasFreeSlotOnDate(venueId: string, dateIso: string): boolean {
+  const { start, end } = dayBounds(dateIso);
+  return store.slots.some(
+    (s) =>
+      s.venueId === venueId &&
+      new Date(s.startsAt).getTime() >= start &&
+      new Date(s.startsAt).getTime() < end &&
+      s.confirmedCount < s.capacity
+  );
+}
+
+export function countFreeSlotsOnDate(venueId: string, dateIso: string): number {
+  const { start, end } = dayBounds(dateIso);
+  return store.slots.filter(
+    (s) =>
+      s.venueId === venueId &&
+      new Date(s.startsAt).getTime() >= start &&
+      new Date(s.startsAt).getTime() < end &&
+      s.confirmedCount < s.capacity
+  ).length;
 }
 
 export async function getVenue(id: string): Promise<Venue | null> {

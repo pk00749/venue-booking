@@ -58,6 +58,13 @@
     "district": "区县",
     "cityAll": "全部城市",
     "districtAll": "全部区县",
+    "dateStripLabel": "选个日子",
+    "dateClearHint": "清空日期",
+    "dateMonthShort": "M月",
+    "dateSlotsCount_one": "{n} 个时段",
+    "dateSlotsCount_other": "{n} 个时段",
+    "dateEmptyWithDate": "所选日期暂无场地，试试别的日期。",
+    "dateOnDay": "当日",
     "priceN/A": "价格未公布",
     "notFoundTitle": "未找到该场地",
     "notFoundBody": "该场地可能已下架或链接有误。",
@@ -87,7 +94,11 @@
     "noSlotsSelected": "请至少选择一个时段",
     "totalLabel": "合计（占位，不收款）",
     "slotTaken": "该时段已被预订，请重新选择",
-    "contactInfo": "联系人信息"
+    "contactInfo": "联系人信息",
+    "backToVenue": "返回场地",
+    "changeSlots": "更换时段",
+    "noSlotChosen": "暂未选择时段",
+    "removeSlotAria": "移除该时段"
   },
   "myBookings": {
     "title": "我的预订",
@@ -271,6 +282,9 @@
     "bookCta": "选择时段预订",
     "backToList": "返回场地列表",
     "noSlots": "所选日期暂无可订时段",
-    "viewAllDates": "查看全部日期"
+    "viewAllDates": "查看全部日期",
+    "bookSlotAria": "预约 {{time}}",
+    "slotFullAria": "已满员，不可预约",
+    "slotBlockedAria": "不可用"
   }
 }

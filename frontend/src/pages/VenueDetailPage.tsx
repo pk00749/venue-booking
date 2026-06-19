@@ -207,7 +207,17 @@ function DateTabs({
   );
 }
 
-function SlotTile({ slot, t, basePriceCents }: { slot: Slot; t: (k: string) => string; basePriceCents: number }) {
+function SlotTile({
+  slot,
+  t,
+  basePriceCents,
+  onPick,
+}: {
+  slot: Slot;
+  t: (k: string, opts?: Record<string, unknown>) => string;
+  basePriceCents: number;
+  onPick: (slotId: string) => void;
+}) {
   const stat = statFor(slot);
   const start = new Date(slot.startsAt);
   const end = new Date(slot.endsAt);
@@ -215,12 +225,23 @@ function SlotTile({ slot, t, basePriceCents }: { slot: Slot; t: (k: string) => s
   const fillPct = Math.round((stat.confirmed / stat.capacity) * 100);
   const disabled = stat.kind === "full" || stat.kind === "blocked";
 
+  const ariaLabel =
+    stat.kind === "full"
+      ? t("venueDetail.slotFullAria")
+      : stat.kind === "blocked"
+        ? t("venueDetail.slotBlockedAria")
+        : t("venueDetail.bookSlotAria", { time });
+
   return (
-    <div
+    <button
+      type="button"
+      disabled={disabled}
+      aria-label={ariaLabel}
+      onClick={() => onPick(slot.id)}
       className={clsx(
-        "group flex flex-col rounded-xl border bg-white p-3.5 transition",
+        "group flex flex-col rounded-xl border bg-white p-3.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ink-300",
         disabled
-          ? "border-canvas-200 opacity-60"
+          ? "border-canvas-200 opacity-60 cursor-not-allowed"
           : "border-canvas-200 hover:-translate-y-0.5 hover:border-ink-300 hover:shadow-softSm"
       )}
     >
@@ -260,7 +281,7 @@ function SlotTile({ slot, t, basePriceCents }: { slot: Slot; t: (k: string) => s
           </span>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -350,12 +371,6 @@ export function VenueDetailPage() {
               {locale === "zh-CN" ? "选择时段" : "Pick a slot"}
             </h2>
           </div>
-          <button
-            onClick={() => navigate(`/venues/${id}/book?date=${date}`)}
-            className="ig-stripe inline-flex items-center gap-2 rounded-full px-4 py-2 font-mono text-[11px] tracking-[0.18em] text-white shadow-softSm transition hover:-translate-y-0.5"
-          >
-            {t("venueDetail.bookCta")} →
-          </button>
         </div>
 
         <DateTabs dates={dateOptions} value={date} onChange={setDate} />
@@ -371,7 +386,13 @@ export function VenueDetailPage() {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {sortedSlots.map((s) => (
-              <SlotTile key={s.id} slot={s} t={t} basePriceCents={venue.basePriceCents} />
+              <SlotTile
+                key={s.id}
+                slot={s}
+                t={t}
+                basePriceCents={venue.basePriceCents}
+                onPick={(slotId) => navigate(`/venues/${venue.id}/book?date=${date}&slot=${slotId}`)}
+              />
             ))}
           </div>
         )}

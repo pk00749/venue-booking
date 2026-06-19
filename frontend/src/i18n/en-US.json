@@ -58,6 +58,13 @@
     "district": "District",
     "cityAll": "All cities",
     "districtAll": "All districts",
+    "dateStripLabel": "Pick a date",
+    "dateClearHint": "Clear date",
+    "dateMonthShort": "mo",
+    "dateSlotsCount_one": "{n} slot",
+    "dateSlotsCount_other": "{n} slots",
+    "dateEmptyWithDate": "No venues on this date — try another.",
+    "dateOnDay": "On this day",
     "priceN/A": "Price TBD",
     "notFoundTitle": "Venue not found",
     "notFoundBody": "This venue may have been removed or the link is broken.",
@@ -87,7 +94,11 @@
     "noSlotsSelected": "Pick at least one slot",
     "totalLabel": "Total (placeholder, not charged)",
     "slotTaken": "This slot was just booked, please pick another",
-    "contactInfo": "Contact"
+    "contactInfo": "Contact",
+    "backToVenue": "Back to venue",
+    "changeSlots": "Change slots",
+    "noSlotChosen": "No slot chosen",
+    "removeSlotAria": "Remove this slot"
   },
   "myBookings": {
     "title": "My bookings",
@@ -271,6 +282,9 @@
     "bookCta": "Pick slots & book",
     "backToList": "← Back to list",
     "noSlots": "No slots for this date",
-    "viewAllDates": "See all dates"
+    "viewAllDates": "See all dates",
+    "bookSlotAria": "Book {{time}}",
+    "slotFullAria": "Full, not bookable",
+    "slotBlockedAria": "Unavailable"
   }
 }

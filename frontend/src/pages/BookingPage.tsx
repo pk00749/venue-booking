@@ -4,9 +4,9 @@
 //   3) 附加服务行（数量 stepper）
 //   4) 联系人 + 备注
 //   5) 底部固定 sticky：合计 + 提交 CTA（IG 渐变）
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { getVenue, listSlots, listVenueServices } from "@/features/venues/api";
 import { createBooking } from "@/features/bookings/api";
@@ -24,15 +24,22 @@ export function BookingPage() {
   const user = useSession((s) => s.user);
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const initialDate = searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
+  const initialSlotId = searchParams.get("slot");
 
-  const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
-  const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
+  const [date, setDate] = useState<string>(initialDate);
+  const [selectedSlots, setSelectedSlots] = useState<Set<string>>(
+    () => (initialSlotId ? new Set([initialSlotId]) : new Set())
+  );
   const [serviceQty, setServiceQty] = useState<Record<string, number>>({});
   const [contactName, setContactName] = useState(user?.nickname ?? "");
   const [contactPhone, setContactPhone] = useState(user?.phone ?? "");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  // 当从场次页带 ?slot= 进入时，把时段网格折叠成已选 chip；否则保持完整 grid
+  const [showSlotPicker, setShowSlotPicker] = useState<boolean>(!initialSlotId);
 
   const { data: venue, isLoading: vLoading } = useQuery({ queryKey: ["venue", id], queryFn: () => getVenue(id), enabled: !!id });
   const { data: slots = [], isLoading: sLoading } = useQuery({
@@ -90,6 +97,21 @@ export function BookingPage() {
     },
   });
 
+  const removeSlot = (slotId: string): void => {
+    setSelectedSlots((prev) => {
+      const next = new Set(prev);
+      next.delete(slotId);
+      return next;
+    });
+  };
+
+  // 已选 chip 被全部移除后，自动展开 picker 让用户重选
+  useEffect(() => {
+    if (!sLoading && selectedSlots.size === 0 && !showSlotPicker) {
+      setShowSlotPicker(true);
+    }
+  }, [sLoading, selectedSlots.size, showSlotPicker]);
+
   if (!user) {
     return (
       <div className="mx-auto max-w-md">
@@ -127,6 +149,14 @@ export function BookingPage() {
 
   return (
     <div className="space-y-5 pb-32">
+      {/* 顶部：返回场地 */}
+      <Link
+        to={`/venues/${id}`}
+        className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-500 hover:text-ink-800"
+      >
+        <span aria-hidden>←</span> {t("booking.backToVenue")}
+      </Link>
+
       {/* 头 */}
       <div>
         <p className="ig-eyebrow">{t("nav.appName")}</p>
@@ -151,7 +181,11 @@ export function BookingPage() {
             type="date"
             value={date}
             min={new Date().toISOString().slice(0, 10)}
-            onChange={(e) => { setDate(e.target.value); setSelectedSlots(new Set()); }}
+            onChange={(e) => {
+              setDate(e.target.value);
+              setSelectedSlots(new Set());
+              setShowSlotPicker(true);
+            }}
             className={clsx(inputCls, "w-auto")}
           />
         </div>
@@ -165,41 +199,83 @@ export function BookingPage() {
               <div key={i} className="h-10 animate-pulse rounded-full bg-canvas-200/60" />
             ))}
           </div>
-        ) : slots.length === 0 ? (
-          <div className="mt-3 rounded-xl border border-canvas-200 bg-canvas-50 p-6 text-center font-mono text-sm text-ink-500">
-            📅 {t("venues.noSlots")}
-          </div>
+        ) : showSlotPicker ? (
+          slots.length === 0 ? (
+            <div className="mt-3 rounded-xl border border-canvas-200 bg-canvas-50 p-6 text-center font-mono text-sm text-ink-500">
+              📅 {t("venues.noSlots")}
+            </div>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+              {slots.map((s) => {
+                const taken = s.status !== "available";
+                const selected = selectedSlots.has(s.id);
+                const time = formatDateTime(s.startsAt, locale).split(" ").pop() ?? "";
+                return (
+                  <button
+                    key={s.id}
+                    disabled={taken}
+                    onClick={() => {
+                      setSelectedSlots((prev) => {
+                        const n = new Set(prev);
+                        if (n.has(s.id)) n.delete(s.id);
+                        else n.add(s.id);
+                        return n;
+                      });
+                    }}
+                    className={clsx(
+                      "rounded-full border px-3 py-2 text-sm font-mono tracking-wider transition",
+                      selected
+                        ? "ig-stripe border-transparent text-white shadow-softSm"
+                        : taken
+                          ? "border-canvas-200 bg-canvas-100 text-ink-400 cursor-not-allowed"
+                          : "border-canvas-200 bg-white text-ink-800 hover:border-ink-300 hover:-translate-y-0.5"
+                    )}
+                  >
+                    {time}
+                  </button>
+                );
+              })}
+            </div>
+          )
         ) : (
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-            {slots.map((s) => {
-              const taken = s.status !== "available";
-              const selected = selectedSlots.has(s.id);
-              const time = formatDateTime(s.startsAt, locale).split(" ").pop() ?? "";
-              return (
-                <button
-                  key={s.id}
-                  disabled={taken}
-                  onClick={() => {
-                    setSelectedSlots((prev) => {
-                      const n = new Set(prev);
-                      if (n.has(s.id)) n.delete(s.id);
-                      else n.add(s.id);
-                      return n;
-                    });
-                  }}
-                  className={clsx(
-                    "rounded-full border px-3 py-2 text-sm font-mono tracking-wider transition",
-                    selected
-                      ? "ig-stripe border-transparent text-white shadow-softSm"
-                      : taken
-                        ? "border-canvas-200 bg-canvas-100 text-ink-400 cursor-not-allowed"
-                        : "border-canvas-200 bg-white text-ink-800 hover:border-ink-300 hover:-translate-y-0.5"
-                  )}
-                >
-                  {time}
-                </button>
-              );
-            })}
+          <div className="mt-3 space-y-3">
+            {selectedSlots.size === 0 ? (
+              <div className="rounded-xl border border-canvas-200 bg-canvas-50 p-4 text-center font-mono text-sm text-ink-500">
+                — {t("booking.noSlotChosen")}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {[...selectedSlots].map((slotId) => {
+                  const slot = slots.find((s) => s.id === slotId);
+                  if (!slot) return null;
+                  const start = formatDateTime(slot.startsAt, locale).split(" ").pop() ?? "";
+                  const end = formatDateTime(slot.endsAt, locale).split(" ").pop() ?? "";
+                  return (
+                    <span
+                      key={slotId}
+                      className="ig-stripe inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-mono tracking-wider text-white shadow-softSm"
+                    >
+                      <span>{start}–{end}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeSlot(slotId)}
+                        aria-label={t("booking.removeSlotAria")}
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowSlotPicker(true)}
+              className="font-mono text-[12px] font-semibold text-ink-500 underline-offset-2 hover:text-ink-800 hover:underline"
+            >
+              {t("booking.changeSlots")} →
+            </button>
           </div>
         )}
         <p className="mt-3 font-mono text-[11px] tracking-wider text-ink-500">
