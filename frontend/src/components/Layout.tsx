@@ -71,7 +71,7 @@ export function Layout() {
                 </span>
               )}
             </NavLink>
-            {user && (
+            {user?.role === "user" && (
               <NavLink to="/my-bookings" className={navClass}>
                 {({ isActive }) => (
                   <span className="inline-flex items-center gap-1.5">

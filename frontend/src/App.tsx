@@ -77,9 +77,9 @@ export default function App() {
         <Route
           path="/my-bookings"
           element={
-            <RequireAuth>
+            <RequireRole role="user">
               <MyBookingsPage />
-            </RequireAuth>
+            </RequireRole>
           }
         />
         <Route

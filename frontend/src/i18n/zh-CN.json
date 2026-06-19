@@ -100,15 +100,15 @@
   },
   "myBookings": {
     "title": "我的预订",
-    "tabUpcoming": "未来",
-    "tabHistory": "历史",
+    "tabUpcoming": "已预订但没开场",
+    "tabHistory": "已结束",
     "empty": "暂无预订",
     "cancel": "取消预订",
     "cancelConfirm": "确认取消这条预订吗？",
     "cancelTooLate": "开场前 {{hours}} 小时内不可取消，请联系场主",
     "cancelled": "已取消",
-    "emptyUpcoming": "暂无未来预订",
-    "emptyHistory": "暂无历史预订",
+    "emptyUpcoming": "还没开场的预订",
+    "emptyHistory": "已结束的预订",
     "emptyBody": "去场地列表看看？选择时段就可以预订了。"
   },
   "auth": {
@@ -284,5 +284,22 @@
     "bookSlotAria": "预约 {{time}}",
     "slotFullAria": "已满员，不可预约",
     "slotBlockedAria": "不可用"
+  },
+  "bottomBar": {
+    "browseAll": "浏览全部",
+    "bookNow": "立即预订",
+    "refresh": "刷新",
+    "startReview": "开始审核",
+    "createVenue": "新建场地",
+    "courtsCount": "{{n}} 片球场",
+    "courtsInCity": "{{n}} 片球场 · {{city}}",
+    "matching": "当前 {{n}} 个结果",
+    "fromPriceShort": "起价 {{price}} /小时",
+    "upcomingAndHistory": "{{upcoming}} 条未开场 / {{finished}} 条已结束",
+    "venuesAndPending": "{{venues}} 片场地 · {{pending}} 待审",
+    "wordsCount": "共 {{n}} 个敏感词",
+    "ownerAppsSummary": "{{owners}} 场主 · {{bookings}} 预订待审",
+    "pendingCount": "{{n}} 条待审",
+    "demoNotice": "演示模式：数据为内存 mock"
   }
 }

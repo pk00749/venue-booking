@@ -82,13 +82,14 @@ export function MyBookingsPage() {
   }
 
   const now = Date.now();
-  const upcoming = bookings.filter((b) => {
-    if (b.status === "cancelled" || b.status === "rejected" || b.status === "completed") return false;
-    return b.slotIds.some((sid) => {
+  // 「未开场 / 已结束」严格按时间切分：任一 slot 还没到开场时间 → 未开场；否则 → 已结束
+  // 状态（pending / confirmed / cancelled / rejected / completed）以 chip 形式展示在卡片上
+  const upcoming = bookings.filter((b) =>
+    b.slotIds.some((sid) => {
       const sl = store.slots.find((s) => s.id === sid);
       return sl ? new Date(sl.startsAt).getTime() > now : false;
-    });
-  });
+    }),
+  );
   const history = bookings.filter((b) => !upcoming.includes(b));
   const list = tab === "upcoming" ? upcoming : history;
 

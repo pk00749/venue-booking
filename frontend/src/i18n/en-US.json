@@ -100,15 +100,15 @@
   },
   "myBookings": {
     "title": "My bookings",
-    "tabUpcoming": "Upcoming",
-    "tabHistory": "History",
+    "tabUpcoming": "Booked · not started",
+    "tabHistory": "Finished",
     "empty": "No bookings yet",
     "cancel": "Cancel",
     "cancelConfirm": "Cancel this booking?",
     "cancelTooLate": "Cancellations close {{hours}}h before start time",
     "cancelled": "Cancelled",
-    "emptyUpcoming": "No upcoming bookings",
-    "emptyHistory": "No booking history",
+    "emptyUpcoming": "Nothing booked, nothing waiting to start",
+    "emptyHistory": "Nothing booked has wrapped up yet",
     "emptyBody": "Browse venues and pick a slot to get started."
   },
   "auth": {
@@ -284,5 +284,22 @@
     "bookSlotAria": "Book {{time}}",
     "slotFullAria": "Full, not bookable",
     "slotBlockedAria": "Unavailable"
+  },
+  "bottomBar": {
+    "browseAll": "Browse all",
+    "bookNow": "Book now",
+    "refresh": "Refresh",
+    "startReview": "Start review",
+    "createVenue": "New venue",
+    "courtsCount": "{{n}} courts",
+    "courtsInCity": "{{n}} courts · {{city}}",
+    "matching": "{{n}} matching",
+    "fromPriceShort": "From {{price}} /hour",
+    "upcomingAndHistory": "{{upcoming}} upcoming / {{finished}} finished",
+    "venuesAndPending": "{{venues}} venues · {{pending}} pending",
+    "wordsCount": "{{n}} sensitive words",
+    "ownerAppsSummary": "{{owners}} owner apps · {{bookings}} bookings to review",
+    "pendingCount": "{{n}} pending",
+    "demoNotice": "Demo mode: in-memory mock data"
   }
 }
