@@ -100,14 +100,6 @@ export function BookingPage() {
     },
   });
 
-  const removeSlot = (slotId: string): void => {
-    setSelectedSlots((prev) => {
-      const next = new Set(prev);
-      next.delete(slotId);
-      return next;
-    });
-  };
-
   // 已选 chip 被全部移除后，自动展开 picker 让用户重选
   useEffect(() => {
     if (!sLoading && selectedSlots.size === 0 && !showSlotPicker) {
@@ -152,14 +144,6 @@ export function BookingPage() {
 
   return (
     <div className="space-y-5 pb-32">
-      {/* 顶部：返回场地 */}
-      <Link
-        to={`/venues/${id}`}
-        className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink-500 hover:text-ink-800"
-      >
-        <span aria-hidden>←</span> {t("booking.backToVenue")}
-      </Link>
-
       {/* 头 */}
       <div>
         <p className="ig-eyebrow">{t("nav.appName")}</p>
@@ -265,25 +249,10 @@ export function BookingPage() {
                     className="ig-stripe inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-mono tracking-wider text-white shadow-softSm"
                   >
                     <span>{start}–{end}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeSlot(slotId)}
-                      aria-label={t("booking.removeSlotAria")}
-                      className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30"
-                    >
-                      ×
-                    </button>
                   </span>
                 );
               })}
             </div>
-            <button
-              type="button"
-              onClick={() => setShowSlotPicker(true)}
-              className="ml-auto font-mono text-[12px] font-semibold text-ink-500 underline-offset-2 hover:text-ink-800 hover:underline"
-            >
-              {t("booking.changeSlots")} →
-            </button>
           </div>
         )}
       </section>

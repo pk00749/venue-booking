@@ -102,7 +102,8 @@ function VenueHeader({ venue, vis }: { venue: Venue; vis: Visual }) {
         </p>
 
         {/* 4 列 stat 条 */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* 3 列 stat 条（营业时间 / 容量 / 起价） */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Stat label={t("venueDetail.openHours")} value={<span className="whitespace-nowrap font-mono text-base text-ink-800">{venue.openTimeStart}–{venue.openTimeEnd}</span>} mono />
           <Stat
             label={t("venueDetail.capacity")}
@@ -128,7 +129,6 @@ function VenueHeader({ venue, vis }: { venue: Venue; vis: Visual }) {
               </>
             }
           />
-          <Stat label="№" value={<span className="font-mono text-sm tracking-wider text-ink-700">{venue.id}</span>} />
         </div>
       </div>
     </section>
@@ -349,7 +349,7 @@ export function VenueDetailPage() {
   const vis = SPORT_VISUAL[venue.sportType];
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-7 pb-20">
       {/* 顶部：返回 */}
       <Link
         to={`/venues${venue.sportType ? `?sport=${venue.sportType}` : ""}`}
@@ -438,6 +438,19 @@ export function VenueDetailPage() {
           </ul>
         </section>
       )}
+
+      {/* 底部 sticky：与 BookingPage 一致的返回按钮 */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-canvas-200 bg-white/95 shadow-[0_-2px_18px_rgba(0,0,0,0.06)] backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+          <Link
+            to={`/venues${venue.sportType ? `?sport=${venue.sportType}` : ""}`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-canvas-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-ink-500 transition hover:border-ink-300 hover:text-ink-800"
+          >
+            <span aria-hidden>←</span>
+            <span className="hidden sm:inline">{t("venueDetail.backToList")}</span>
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

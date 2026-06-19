@@ -96,9 +96,6 @@
     "slotTaken": "This slot was just booked, please pick another",
     "contactInfo": "Contact",
     "backToVenue": "Back to venue",
-    "changeSlots": "Change slots",
-    "noSlotChosen": "No slot chosen",
-    "removeSlotAria": "Remove this slot",
     "phoneInvalid": "Please enter a valid 11-digit phone number"
   },
   "myBookings": {
