@@ -98,7 +98,8 @@
     "backToVenue": "返回场地",
     "changeSlots": "更换时段",
     "noSlotChosen": "暂未选择时段",
-    "removeSlotAria": "移除该时段"
+    "removeSlotAria": "移除该时段",
+    "phoneInvalid": "请输入有效的 11 位手机号"
   },
   "myBookings": {
     "title": "我的预订",

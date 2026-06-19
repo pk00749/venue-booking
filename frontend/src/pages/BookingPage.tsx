@@ -38,6 +38,9 @@ export function BookingPage() {
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const phoneIsValid = (p: string): boolean => /^1[3-9]\d{9}$/.test(p);
+  const phoneError = phoneTouched && contactPhone.length > 0 && !phoneIsValid(contactPhone);
   // 当从场次页带 ?slot= 进入时，把时段网格折叠成已选 chip；否则保持完整 grid
   const [showSlotPicker, setShowSlotPicker] = useState<boolean>(!initialSlotId);
 
@@ -172,115 +175,117 @@ export function BookingPage() {
 
       {/* 日期 + 时段 */}
       <section className="rounded-2xl border border-canvas-200 bg-white p-5 shadow-softSm">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="ig-eyebrow">{t("venues.selectDate")}</p>
-            <h2 className="mt-1 font-display text-2xl text-ink-800">{t("venues.selectDate")}</h2>
-          </div>
-          <input
-            type="date"
-            value={date}
-            min={new Date().toISOString().slice(0, 10)}
-            onChange={(e) => {
-              setDate(e.target.value);
-              setSelectedSlots(new Set());
-              setShowSlotPicker(true);
-            }}
-            className={clsx(inputCls, "w-auto")}
-          />
-        </div>
-
-        <div className="ig-hairline mt-4" />
-
-        <p className="ig-eyebrow mt-4">{t("venues.selectSlots")}</p>
-        {sLoading ? (
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-              <div key={i} className="h-10 animate-pulse rounded-full bg-canvas-200/60" />
-            ))}
-          </div>
-        ) : showSlotPicker ? (
-          slots.length === 0 ? (
-            <div className="mt-3 rounded-xl border border-canvas-200 bg-canvas-50 p-6 text-center font-mono text-sm text-ink-500">
-              📅 {t("venues.noSlots")}
+        {showSlotPicker ? (
+          <>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="ig-eyebrow">{t("venues.selectDate")}</p>
+                <h2 className="mt-1 font-display text-2xl text-ink-800">{t("venues.selectDate")}</h2>
+              </div>
+              <input
+                type="date"
+                value={date}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => {
+                  setDate(e.target.value);
+                  setSelectedSlots(new Set());
+                  setShowSlotPicker(true);
+                }}
+                className={clsx(inputCls, "w-auto")}
+              />
             </div>
-          ) : (
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-              {slots.map((s) => {
-                const taken = s.status !== "available";
-                const selected = selectedSlots.has(s.id);
-                const time = formatDateTime(s.startsAt, locale).split(" ").pop() ?? "";
-                return (
-                  <button
-                    key={s.id}
-                    disabled={taken}
-                    onClick={() => {
-                      setSelectedSlots((prev) => {
-                        const n = new Set(prev);
-                        if (n.has(s.id)) n.delete(s.id);
-                        else n.add(s.id);
-                        return n;
-                      });
-                    }}
-                    className={clsx(
-                      "rounded-full border px-3 py-2 text-sm font-mono tracking-wider transition",
-                      selected
-                        ? "ig-stripe border-transparent text-white shadow-softSm"
-                        : taken
-                          ? "border-canvas-200 bg-canvas-100 text-ink-400 cursor-not-allowed"
-                          : "border-canvas-200 bg-white text-ink-800 hover:border-ink-300 hover:-translate-y-0.5"
-                    )}
-                  >
-                    {time}
-                  </button>
-                );
-              })}
-            </div>
-          )
-        ) : (
-          <div className="mt-3 space-y-3">
-            {selectedSlots.size === 0 ? (
-              <div className="rounded-xl border border-canvas-200 bg-canvas-50 p-4 text-center font-mono text-sm text-ink-500">
-                — {t("booking.noSlotChosen")}
+
+            <div className="ig-hairline mt-4" />
+
+            <p className="ig-eyebrow mt-4">{t("venues.selectSlots")}</p>
+            {sLoading ? (
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+                  <div key={i} className="h-10 animate-pulse rounded-full bg-canvas-200/60" />
+                ))}
+              </div>
+            ) : slots.length === 0 ? (
+              <div className="mt-3 rounded-xl border border-canvas-200 bg-canvas-50 p-6 text-center font-mono text-sm text-ink-500">
+                📅 {t("venues.noSlots")}
               </div>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {[...selectedSlots].map((slotId) => {
-                  const slot = slots.find((s) => s.id === slotId);
-                  if (!slot) return null;
-                  const start = formatDateTime(slot.startsAt, locale).split(" ").pop() ?? "";
-                  const end = formatDateTime(slot.endsAt, locale).split(" ").pop() ?? "";
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                {slots.map((s) => {
+                  const taken = s.status !== "available";
+                  const selected = selectedSlots.has(s.id);
+                  const time = formatDateTime(s.startsAt, locale).split(" ").pop() ?? "";
                   return (
-                    <span
-                      key={slotId}
-                      className="ig-stripe inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-mono tracking-wider text-white shadow-softSm"
+                    <button
+                      key={s.id}
+                      disabled={taken}
+                      onClick={() => {
+                        setSelectedSlots((prev) => {
+                          const n = new Set(prev);
+                          if (n.has(s.id)) n.delete(s.id);
+                          else n.add(s.id);
+                          return n;
+                        });
+                      }}
+                      className={clsx(
+                        "rounded-full border px-3 py-2 text-sm font-mono tracking-wider transition",
+                        selected
+                          ? "ig-stripe border-transparent text-white shadow-softSm"
+                          : taken
+                            ? "border-canvas-200 bg-canvas-100 text-ink-400 cursor-not-allowed"
+                            : "border-canvas-200 bg-white text-ink-800 hover:border-ink-300 hover:-translate-y-0.5"
+                      )}
                     >
-                      <span>{start}–{end}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeSlot(slotId)}
-                        aria-label={t("booking.removeSlotAria")}
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30"
-                      >
-                        ×
-                      </button>
-                    </span>
+                      {time}
+                    </button>
                   );
                 })}
               </div>
             )}
+            <p className="mt-3 font-mono text-[11px] tracking-wider text-ink-500">
+              {t("booking.selectedSlots")}: <span className="font-semibold text-ink-800">{selectedSlots.size}</span>
+            </p>
+          </>
+        ) : (
+          // 日期和时段都已经从 URL 确定 → 折叠成单行摘要，避免重复选择
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            <div className="flex items-center gap-2">
+              <span aria-hidden>📅</span>
+              <span className="font-mono text-sm tracking-wider text-ink-800">{date}</span>
+            </div>
+            <span aria-hidden className="h-5 w-px bg-canvas-200" />
+            <div className="flex flex-wrap items-center gap-2">
+              {[...selectedSlots].map((slotId) => {
+                const slot = slots.find((s) => s.id === slotId);
+                if (!slot) return null;
+                const start = formatDateTime(slot.startsAt, locale).split(" ").pop() ?? "";
+                const end = formatDateTime(slot.endsAt, locale).split(" ").pop() ?? "";
+                return (
+                  <span
+                    key={slotId}
+                    className="ig-stripe inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-mono tracking-wider text-white shadow-softSm"
+                  >
+                    <span>{start}–{end}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeSlot(slotId)}
+                      aria-label={t("booking.removeSlotAria")}
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30"
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
             <button
               type="button"
               onClick={() => setShowSlotPicker(true)}
-              className="font-mono text-[12px] font-semibold text-ink-500 underline-offset-2 hover:text-ink-800 hover:underline"
+              className="ml-auto font-mono text-[12px] font-semibold text-ink-500 underline-offset-2 hover:text-ink-800 hover:underline"
             >
               {t("booking.changeSlots")} →
             </button>
           </div>
         )}
-        <p className="mt-3 font-mono text-[11px] tracking-wider text-ink-500">
-          {t("booking.selectedSlots")}: <span className="font-semibold text-ink-800">{selectedSlots.size}</span>
-        </p>
       </section>
 
       {/* 附加服务 */}
@@ -341,7 +346,19 @@ export function BookingPage() {
           </div>
           <div className="space-y-1.5">
             <label className="ig-eyebrow block">{t("booking.contactPhone")}</label>
-            <input className={inputCls} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+            <input
+              inputMode="numeric"
+              maxLength={11}
+              className={inputCls}
+              value={contactPhone}
+              onChange={(e) => setContactPhone(e.target.value.replace(/\D/g, ""))}
+              onBlur={() => setPhoneTouched(true)}
+            />
+            {phoneError && (
+              <p className="font-mono text-[11px] tracking-wider text-squash-dark">
+                ⚠️ {t("booking.phoneInvalid")}
+              </p>
+            )}
           </div>
         </div>
         <div className="mt-3 space-y-1.5">
@@ -358,18 +375,35 @@ export function BookingPage() {
 
       {/* 底部 sticky */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-canvas-200 bg-white/95 shadow-[0_-2px_18px_rgba(0,0,0,0.06)] backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-          <div>
-            <div className="ig-eyebrow">{t("venues.stickyTotal")}</div>
-            <div className="font-display text-2xl text-ink-800">{formatMoney(total, locale)}</div>
-          </div>
-          <button
-            onClick={() => { setError(null); submit.mutate(); }}
-            disabled={submit.isPending || selectedSlots.size === 0}
-            className="ig-stripe inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-softSm transition hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+          <Link
+            to={`/venues/${id}`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-canvas-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-ink-500 transition hover:border-ink-300 hover:text-ink-800"
           >
-            {submit.isPending ? t("common.loading") : t("booking.submit")} →
-          </button>
+            <span aria-hidden>←</span>
+            <span className="hidden sm:inline">{t("booking.backToVenue")}</span>
+          </Link>
+          <div className="ml-auto flex items-center gap-4">
+            <div className="text-right">
+              <div className="ig-eyebrow">{t("venues.stickyTotal")}</div>
+              <div className="font-display text-2xl text-ink-800">{formatMoney(total, locale)}</div>
+            </div>
+            <button
+              onClick={() => {
+                setPhoneTouched(true);
+                if (!phoneIsValid(contactPhone)) {
+                  setError(t("booking.phoneInvalid"));
+                  return;
+                }
+                setError(null);
+                submit.mutate();
+              }}
+              disabled={submit.isPending || selectedSlots.size === 0}
+              className="ig-stripe inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-softSm transition hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+            >
+              {submit.isPending ? t("common.loading") : t("booking.submit")} →
+            </button>
+          </div>
         </div>
       </div>
     </div>

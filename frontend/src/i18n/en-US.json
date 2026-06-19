@@ -98,7 +98,8 @@
     "backToVenue": "Back to venue",
     "changeSlots": "Change slots",
     "noSlotChosen": "No slot chosen",
-    "removeSlotAria": "Remove this slot"
+    "removeSlotAria": "Remove this slot",
+    "phoneInvalid": "Please enter a valid 11-digit phone number"
   },
   "myBookings": {
     "title": "My bookings",
