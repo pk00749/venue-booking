@@ -195,6 +195,14 @@ export function MyBookingsPage() {
                     <div className="mt-1.5 text-[13px] text-ink-700">
                       👤 {b.contactName} · 📞 {b.contactPhone}
                     </div>
+                    {b.notes && b.notes.trim() && (
+                      <div className="mt-1 text-[13px] text-ink-700">
+                        <span className="font-mono text-[10px] tracking-[0.16em] text-ink-500">
+                          🗒️ {t("myBookings.notesLabel")}
+                        </span>
+                        <span className="ml-1 whitespace-pre-wrap break-words">{b.notes}</span>
+                      </div>
+                    )}
                     <div className="mt-1 font-display text-base text-ink-800">{formatMoney(b.totalPriceCents, locale)}</div>
                   </div>
                 </div>
