@@ -97,7 +97,13 @@
     "contactInfo": "联系人信息",
     "backToVenue": "返回场馆",
     "phoneInvalid": "请输入有效的 11 位手机号",
-    "backToSlots": "返回时段"
+    "backToSlots": "返回时段",
+    "checkInModalTitle": "预订成功",
+    "checkInModalSubtitle": "请使用下方核销码，到场后向场主出示核销",
+    "checkInCodeLabel": "核销码",
+    "checkInCodeHint": "手机号后 4 位",
+    "checkInCodeNote": "请截图保存或记住这 4 位数字",
+    "checkInModalCta": "我知道了，去我的预订"
   },
   "myBookings": {
     "title": "我的预订",
@@ -109,6 +115,7 @@
     "cancelTooLate": "开场前 {{hours}} 小时内不可取消，请联系场主",
     "cancelled": "已取消",
     "emptyUpcoming": "还没开场的预订",
+    "notesLabel": "备注",
     "emptyHistory": "已结束的预订",
     "emptyBody": "去场馆列表看看？选择时段就可以预订了。"
   },

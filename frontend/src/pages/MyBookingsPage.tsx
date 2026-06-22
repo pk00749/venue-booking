@@ -82,12 +82,12 @@ export function MyBookingsPage() {
   }
 
   const now = Date.now();
-  // 「未开场 / 已结束」严格按时间切分：任一 slot 还没到开场时间 → 未开场；否则 → 已结束
+  // 「未结束 / 已结束」严格按 slot.endsAt 切分：所有 slot 的 endsAt 都 ≤ now → 已结束；否则 → 未结束
   // 状态（pending / confirmed / cancelled / rejected / completed）以 chip 形式展示在卡片上
   const upcoming = bookings.filter((b) =>
     b.slotIds.some((sid) => {
       const sl = store.slots.find((s) => s.id === sid);
-      return sl ? new Date(sl.startsAt).getTime() > now : false;
+      return sl ? new Date(sl.endsAt).getTime() > now : false;
     }),
   );
   const history = bookings.filter((b) => !upcoming.includes(b));

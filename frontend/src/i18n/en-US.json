@@ -97,7 +97,13 @@
     "contactInfo": "Contact",
     "backToVenue": "Back to venue",
     "phoneInvalid": "Please enter a valid 11-digit phone number",
-    "backToSlots": "Back to slots"
+    "backToSlots": "Back to slots",
+    "checkInModalTitle": "Booking confirmed",
+    "checkInModalSubtitle": "Show this code to the venue owner on arrival to check in",
+    "checkInCodeLabel": "Check-in code",
+    "checkInCodeHint": "Last 4 digits of your phone",
+    "checkInCodeNote": "Screenshot or memorize these 4 digits",
+    "checkInModalCta": "Got it, view my bookings"
   },
   "myBookings": {
     "title": "My bookings",
@@ -109,6 +115,7 @@
     "cancelTooLate": "Cancellations close {{hours}}h before start time",
     "cancelled": "Cancelled",
     "emptyUpcoming": "Nothing booked, nothing waiting to start",
+    "notesLabel": "Notes",
     "emptyHistory": "Nothing booked has wrapped up yet",
     "emptyBody": "Browse venues and pick a slot to get started."
   },

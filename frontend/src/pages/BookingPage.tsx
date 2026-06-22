@@ -85,7 +85,7 @@ export function BookingPage() {
       qc.invalidateQueries({ queryKey: ["slots", id] });
       qc.invalidateQueries({ queryKey: ["my-bookings"] });
       setSubmitted(true);
-      setTimeout(() => navigate("/my-bookings"), 800);
+      // 不再自动跳转 —— 等用户在核销码弹窗里点 CTA 再走
     },
     onError: (e: Error) => {
       if (e.message.startsWith("sensitive:")) {
@@ -152,9 +152,10 @@ export function BookingPage() {
       </div>
 
       {submitted && (
-        <div className="rounded-xl border border-football/30 bg-football-light px-3.5 py-2.5 text-sm text-football-dark">
-          ✅ {t("booking.submitted")} — {t("common.loading")}
-        </div>
+        <CheckInModal
+          phone={contactPhone}
+          onClose={() => navigate("/my-bookings")}
+        />
       )}
 
       {/* 日期 + 时段 */}
@@ -374,6 +375,71 @@ export function BookingPage() {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// 核销码弹窗 —— 预订成功时显示，用手机号后 4 位作为场主核销码
+//   - 居中卡片，背景遮罩 + blur
+//   - 大号 mono 数字 + 截图/记住提示
+//   - 单 CTA：去「我的预订」
+function CheckInModal({
+  phone,
+  onClose,
+}: {
+  phone: string;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  // 容错：手机号不足 4 位时显示占位，避免 NaN / 空
+  const code = phone.replace(/\D/g, "").slice(-4).padStart(4, "•");
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="checkin-modal-title"
+      className="fixed inset-0 z-30 flex items-center justify-center p-4"
+    >
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative w-full max-w-sm rounded-2xl border border-canvas-200 bg-white p-6 shadow-soft">
+        <div className="text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-football-light text-2xl">
+            ✅
+          </div>
+          <p className="ig-eyebrow mt-3">{t("nav.appName")}</p>
+          <h2
+            id="checkin-modal-title"
+            className="mt-1 font-display text-2xl text-ink-800"
+          >
+            {t("booking.checkInModalTitle")}
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-ink-600">
+            {t("booking.checkInModalSubtitle")}
+          </p>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-canvas-200 bg-canvas-50 px-4 py-5 text-center">
+          <p className="ig-eyebrow">{t("booking.checkInCodeLabel")}</p>
+          <p className="mt-2 font-mono text-4xl font-semibold tracking-[0.4em] text-ink-800">
+            {code}
+          </p>
+          <p className="mt-3 font-mono text-[11px] tracking-wider text-ink-500">
+            {t("booking.checkInCodeHint")} · {t("booking.checkInCodeNote")}
+          </p>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="ig-stripe mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-softSm transition hover:-translate-y-0.5"
+        >
+          {t("booking.checkInModalCta")} →
+        </button>
       </div>
     </div>
   );

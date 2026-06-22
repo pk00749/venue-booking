@@ -223,7 +223,8 @@ function SlotTile({
   const end = new Date(slot.endsAt);
   const time = `${format(start, "HH:mm")}–${format(end, "HH:mm")}`;
   const fillPct = Math.round((stat.confirmed / stat.capacity) * 100);
-  const isPast = start.getTime() < Date.now();
+  // 过期判断改用结束时间：只要场次还没结束，用户仍可下订进半场
+  const isPast = end.getTime() < Date.now();
   const disabled = isPast || stat.kind === "full" || stat.kind === "blocked";
 
   const ariaLabel = isPast
@@ -300,7 +301,7 @@ export function VenueDetailPage() {
   const [date, setDate] = useState<string>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    return d.toISOString().slice(0, 10);
+    return format(d, "yyyy-MM-dd");
   });
 
   const { data: venue, isLoading: vLoading } = useQuery({
@@ -324,7 +325,7 @@ export function VenueDetailPage() {
     today.setHours(0, 0, 0, 0);
     return Array.from({ length: 7 }, (_, i) => {
       const d = addDays(today, i);
-      return d.toISOString().slice(0, 10);
+      return format(d, "yyyy-MM-dd");
     });
   }, []);
 
