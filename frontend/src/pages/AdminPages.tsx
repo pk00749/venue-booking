@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession, useUi } from "@/lib/store";
 import { store } from "@/lib/mock-data";
-import { formatDateTime } from "@/lib/format";
+import { formatCourtName, formatDateTime } from "@/lib/format";
 import {
   getDashboardStats,
   listSensitiveWords,
@@ -368,9 +368,14 @@ export function AdminPendingBookingsPage() {
                   </div>
                   <div className="mt-0.5 text-xs text-ink-500">
                     {b.slotIds
-                      .map((sid) => store.slots.find((s) => s.id === sid)?.startsAt)
+                      .map((sid) => {
+                        const sl = store.slots.find((s) => s.id === sid);
+                        if (!sl) return null;
+                        const court = store.courts.find((c) => c.id === sl.courtId);
+                        const courtName = court ? formatCourtName(court, locale) : "—";
+                        return `${formatDateTime(sl.startsAt, locale)} · ${t("admin.court")} ${courtName}`;
+                      })
                       .filter(Boolean)
-                      .map((iso) => formatDateTime(iso!, locale))
                       .join(" · ")}
                   </div>
                   <div className="mt-1 text-xs text-ink-500">

@@ -1,4 +1,5 @@
 import type { Locale } from "./types";
+import type { Court } from "./types";
 
 const moneyFmt = (locale: Locale) =>
   new Intl.NumberFormat(locale === "zh-CN" ? "zh-CN" : "en-US", {
@@ -34,4 +35,10 @@ export function formatTimeRange(startIso: string, endIso: string, locale: Locale
     locale === "zh-CN" ? "zh-CN" : "en-US",
     { hour: "2-digit", minute: "2-digit", hour12: false }
   ).format(new Date(endIso))}`;
+}
+
+// 场地名按 locale 选择 name_zh / name_en；缺一边时回退另一边
+export function formatCourtName(court: Court, locale: Locale = "zh-CN"): string {
+  if (locale === "zh-CN") return court.name_zh || court.name_en || court.id;
+  return court.name_en || court.name_zh || court.id;
 }

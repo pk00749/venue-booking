@@ -65,8 +65,22 @@ export interface Venue {
   status: "active" | "inactive";
   createdAt: string;
   // —— v2 mock 增量字段 ——
-  capacity: number;        // 单场可容纳人数
+  capacity: number;        // 默认单场地容纳人数；具体场地可在 courts[*].capacity 覆盖
   notes?: string;          // 场馆备注（空时 UI 渲染为「无」）
+}
+
+// —— v3：场馆下属的「场地 / court」 ——
+// 一个球馆通常有 2–4 片场地（A/B/C…），场主可自由命名；slot 改挂到 court 下，
+// 实现「球馆 → 场次 → 场地」三层预订流程。名称按双语独立存，缺一边时回退另一边。
+export interface Court {
+  id: string;
+  venueId: string;
+  name_zh: string;         // 中文显示名（"A 场" / "1 号场"）
+  name_en: string;         // 英文显示名（"Court A" / "Court 1"）
+  sortOrder: number;       // 列表/选择时的稳定排序
+  capacity: number;        // 单场地容纳人数（拼场容量；不是预订占位）
+  isActive: boolean;       // 软停用；停用后该 court 不再展示
+  createdAt: string;
 }
 
 export interface VenueService {
@@ -80,6 +94,7 @@ export interface VenueService {
 export interface Slot {
   id: string;
   venueId: string;
+  courtId: string;         // v3：隶属具体场地；同 court 同 starts_at 唯一
   startsAt: string; // ISO
   endsAt: string;
   status: SlotStatus;

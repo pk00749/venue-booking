@@ -1,7 +1,8 @@
 // 场馆相关 Mock API —— 后续替换为 supabase.from('venues').select(...)
 import { store, newId, nowIso } from "@/lib/mock-data";
 import { checkSensitive } from "@/lib/sensitive";
-import type { SportType, Venue, VenueService } from "@/lib/types";
+import { courtLetter } from "@/lib/mock-data";
+import type { Court, Slot, SportType, Venue, VenueService } from "@/lib/types";
 
 const wait = <T,>(value: T, ms = 150): Promise<T> =>
   new Promise((res) => setTimeout(() => res(value), ms));
@@ -106,6 +107,74 @@ export async function listSlots(venueId: string, dateIso?: string) {
   return wait(rows);
 }
 
+// —— v3：返回某场馆下 active 的场地列表（按 sortOrder 升序） ——
+export async function listCourts(venueId: string): Promise<Court[]> {
+  return wait(
+    store.courts
+      .filter((c) => c.venueId === venueId && c.isActive)
+      .sort((a, b) => a.sortOrder - b.sortOrder),
+  );
+}
+
+export async function getCourt(courtId: string): Promise<Court | null> {
+  return wait(store.courts.find((c) => c.id === courtId) ?? null);
+}
+
+export interface Session {
+  startsAt: string;
+  endsAt: string;
+  totalCourts: number;     // 该场次下场地总数
+  availableCourts: number; // 该场次下可加入（status=available 且 confirmedCount < capacity）的场地数
+  courts: { court: Court; slot: Slot }[]; // 该场次下 (court, slot) 配对
+}
+
+// —— v3：返回某场馆某日的场次列表（按 startsAt 升序） ——
+// 把当日所有 slot 按 startsAt 聚合，每条场次下挂 (court, slot) 配对。
+export async function listSessions(venueId: string, dateIso: string): Promise<Session[]> {
+  const day = new Date(dateIso);
+  day.setHours(0, 0, 0, 0);
+  const next = new Date(day);
+  next.setDate(next.getDate() + 1);
+  const courts = store.courts
+    .filter((c) => c.venueId === venueId && c.isActive)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const courtById = new Map(courts.map((c) => [c.id, c]));
+  const slots = store.slots.filter((s) => {
+    if (s.venueId !== venueId) return false;
+    const t = new Date(s.startsAt).getTime();
+    return t >= day.getTime() && t < next.getTime() && courtById.has(s.courtId);
+  });
+  const byStart = new Map<string, Session>();
+  for (const s of slots) {
+    const court = courtById.get(s.courtId)!;
+    let sess = byStart.get(s.startsAt);
+    if (!sess) {
+      sess = { startsAt: s.startsAt, endsAt: s.endsAt, totalCourts: 0, availableCourts: 0, courts: [] };
+      byStart.set(s.startsAt, sess);
+    }
+    sess.totalCourts += 1;
+    const joinable = s.status === "available" && s.confirmedCount < s.capacity;
+    if (joinable) sess.availableCourts += 1;
+    sess.courts.push({ court, slot: s });
+  }
+  return wait(
+    Array.from(byStart.values())
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+      // 场次内 court 按 sortOrder 排序，保证「A 场 / B 场…」稳定
+      .map((sess) => ({
+        ...sess,
+        courts: [...sess.courts].sort((x, y) => x.court.sortOrder - y.court.sortOrder),
+      })),
+  );
+}
+
+// —— v3：根据 (courtId, startsAt) 找对应 slot ——
+export async function findSlot(courtId: string, startsAt: string): Promise<Slot | null> {
+  return wait(
+    store.slots.find((s) => s.courtId === courtId && s.startsAt === startsAt) ?? null,
+  );
+}
+
 /**
  * 取某个场馆接下来 N 个「仍有空位」的可订日期（YYYY-MM-DD）。
  * 用于场馆列表的「最近 3 个可订日期」展示。
@@ -148,6 +217,7 @@ export interface CreateVenueInput {
   basePriceCents: number;
   capacity: number;
   notes?: string;
+  courts?: { name_zh: string; name_en: string }[]; // v3：场地（按行对齐，单边缺失时回退到自动字母）
 }
 
 export async function createVenue(input: CreateVenueInput): Promise<{ ok: true; venue: Venue } | { ok: false; words: string[] }> {
@@ -180,7 +250,40 @@ export async function createVenue(input: CreateVenueInput): Promise<{ ok: true; 
     notes: input.notes,
   };
   store.venues.push(v);
-  // 同步生成 slot
+  // v3：先建 courts，再为每片 court 生成 slot
+  const courtInputs = input.courts && input.courts.length > 0
+    ? input.courts
+    : [0, 1, 2, 3].map((i) => ({ name_zh: `${courtLetter(i)} 场`, name_en: `Court ${courtLetter(i)}` }));
+  const max = Math.max(
+    ...courtInputs.map((c) => [c.name_zh.trim(), c.name_en.trim()].filter(Boolean).length),
+  );
+  const courts: Court[] = courtInputs.map((c, i) => ({
+    id: `c_${v.id}_${i}`,
+    venueId: v.id,
+    name_zh: c.name_zh.trim() || `${courtLetter(i)} 场`,
+    name_en: c.name_en.trim() || `Court ${courtLetter(i)}`,
+    sortOrder: i,
+    capacity: v.capacity,
+    isActive: true,
+    createdAt: nowIso(),
+  }));
+  // 容错：如果用户只填了一边的某些行，按行数对齐裁剪
+  for (let i = 0; i < max; i++) {
+    if (!courts[i]) {
+      courts.push({
+        id: `c_${v.id}_${i}`,
+        venueId: v.id,
+        name_zh: `${courtLetter(i)} 场`,
+        name_en: `Court ${courtLetter(i)}`,
+        sortOrder: i,
+        capacity: v.capacity,
+        isActive: true,
+        createdAt: nowIso(),
+      });
+    }
+  }
+  store.courts.push(...courts);
+  // 同步为每片 court 生成 7 天 × 营业时段内的 slot
   const step = v.slotDurationMinutes;
   const [sh, sm] = v.openTimeStart.split(":").map(Number);
   const [eh, em] = v.openTimeEnd.split(":").map(Number);
@@ -192,18 +295,21 @@ export async function createVenue(input: CreateVenueInput): Promise<{ ok: true; 
     start.setHours(sh, sm, 0, 0);
     const end = new Date(day);
     end.setHours(eh, em, 0, 0);
-    for (let t = new Date(start); t.getTime() + step * 60_000 <= end.getTime(); t = new Date(t.getTime() + step * 60_000)) {
-      const ts = new Date(t);
-      const te = new Date(t.getTime() + step * 60_000);
-      store.slots.push({
-        id: `sl_${v.id}_${ts.getTime()}`,
-        venueId: v.id,
-        startsAt: ts.toISOString(),
-        endsAt: te.toISOString(),
-        status: "available",
-        capacity: v.capacity,
-        confirmedCount: 0,
-      });
+    for (const court of courts) {
+      for (let t = new Date(start); t.getTime() + step * 60_000 <= end.getTime(); t = new Date(t.getTime() + step * 60_000)) {
+        const ts = new Date(t);
+        const te = new Date(t.getTime() + step * 60_000);
+        store.slots.push({
+          id: `sl_${court.id}_${ts.getTime()}`,
+          venueId: v.id,
+          courtId: court.id,
+          startsAt: ts.toISOString(),
+          endsAt: te.toISOString(),
+          status: "available",
+          capacity: court.capacity,
+          confirmedCount: 0,
+        });
+      }
     }
   }
   return wait({ ok: true, venue: v });

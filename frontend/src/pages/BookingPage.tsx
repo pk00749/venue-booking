@@ -1,21 +1,56 @@
-// 提交预订 —— IG 风
-//   1) 头：eyebrow + venue 名
-//   2) 日期 picker + 时段 grid（白底圆角 chip，selected IG 渐变）
-//   3) 附加服务行（数量 stepper）
-//   4) 联系人 + 备注
-//   5) 底部固定 sticky：合计 + 提交 CTA（IG 渐变）
+// 提交预订 —— IG 风（v3 重构为「球馆 → 场次 → 场地」三层）
+//   1) 顶部只读 summary：球馆 + 场次时间 + 场地名 + "X/Y 满" 拼场进度
+//   2) 附加服务（数量 stepper）
+//   3) 联系人 + 备注
+//   4) 底部固定 sticky：合计 + 提交 CTA
+// URL 形式：/venues/:id/book?date=YYYY-MM-DD&start=<ISO>&court=<courtId>
+// 向后兼容：旧 ?slot=sl_<...> 自动解析后 navigate(replace) 跳新 URL
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getVenue, listSlots, listVenueServices } from "@/features/venues/api";
+import { format } from "date-fns";
+import {
+  findSlot,
+  getCourt,
+  getVenue,
+  listVenueServices,
+} from "@/features/venues/api";
 import { createBooking } from "@/features/bookings/api";
 import { useSession, useUi } from "@/lib/store";
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatCourtName, formatDate, formatMoney } from "@/lib/format";
+import { store } from "@/lib/mock-data";
 import clsx from "clsx";
 
 const inputCls =
   "w-full rounded-xl border border-canvas-200 bg-white px-3.5 py-2.5 text-sm text-ink-800 placeholder-ink-400 transition focus:border-ink-300 focus:outline-none focus:ring-2 focus:ring-ink-200";
+
+// 解析旧 ?slot= 的兼容入口：
+//   - 新格式：sl_<courtId>_<tsMs>，courtId 形如 c_<venueId>_<idx>
+//   - 旧格式（v3 之前的 mock）：sl_<venueId>_<tsMs>
+// 任一格式都能反推到 (courtId, startsAt) → 跳新 URL。
+function resolveLegacySlotToCourt(
+  slotId: string,
+  venueId: string,
+): { courtId: string; startsAt: string } | null {
+  const m = slotId.match(/^sl_(.+)_\d{13,}$/);
+  if (!m) return null;
+  const head = m[1];
+  const tsMs = Number(slotId.slice(slotId.lastIndexOf("_") + 1));
+  if (!Number.isFinite(tsMs)) return null;
+  const startsAt = new Date(tsMs).toISOString();
+  // 新格式：head = c_<venueId>_<idx>；直接查 store
+  const candidate = store.courts.find((c) => c.id === head && c.venueId === venueId);
+  if (candidate) return { courtId: candidate.id, startsAt };
+  // 旧格式：head = <venueId>；取该 venue 首片 active court
+  if (head === venueId) {
+    const first = store.courts
+      .filter((c) => c.venueId === venueId && c.isActive)
+      .sort((a, b) => a.sortOrder - b.sortOrder)[0];
+    if (first) return { courtId: first.id, startsAt };
+  }
+  return null;
+}
 
 export function BookingPage() {
   const { id = "" } = useParams();
@@ -25,13 +60,11 @@ export function BookingPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [searchParams] = useSearchParams();
-  const initialDate = searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
-  const initialSlotId = searchParams.get("slot");
+  const date = searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
+  const startParam = searchParams.get("start");
+  const courtId = searchParams.get("court");
+  const legacySlot = searchParams.get("slot");
 
-  const [date, setDate] = useState<string>(initialDate);
-  const [selectedSlots, setSelectedSlots] = useState<Set<string>>(
-    () => (initialSlotId ? new Set([initialSlotId]) : new Set())
-  );
   const [serviceQty, setServiceQty] = useState<Record<string, number>>({});
   const [contactName, setContactName] = useState(user?.nickname ?? "");
   const [contactPhone, setContactPhone] = useState(user?.phone ?? "");
@@ -41,36 +74,65 @@ export function BookingPage() {
   const [phoneTouched, setPhoneTouched] = useState(false);
   const phoneIsValid = (p: string): boolean => /^1[3-9]\d{9}$/.test(p);
   const phoneError = phoneTouched && contactPhone.length > 0 && !phoneIsValid(contactPhone);
-  // 当从场次页带 ?slot= 进入时，把时段网格折叠成已选 chip；否则保持完整 grid
-  const [showSlotPicker, setShowSlotPicker] = useState<boolean>(!initialSlotId);
 
-  const { data: venue, isLoading: vLoading } = useQuery({ queryKey: ["venue", id], queryFn: () => getVenue(id), enabled: !!id });
-  const { data: slots = [], isLoading: sLoading } = useQuery({
-    queryKey: ["slots", id, date],
-    queryFn: () => listSlots(id, new Date(date).toISOString()),
-    enabled: !!id && !!user,
+  // 旧 ?slot= → 新 ?date=&start=&court= 跳转
+  useEffect(() => {
+    if (legacySlot && id && (!courtId || !startParam)) {
+      const resolved = resolveLegacySlotToCourt(legacySlot, id);
+      if (resolved) {
+        const slot = store.slots.find(
+          (s) => s.courtId === resolved.courtId && s.startsAt === resolved.startsAt,
+        );
+        const day = slot ? format(new Date(slot.startsAt), "yyyy-MM-dd") : date;
+        navigate(
+          `/venues/${id}/book?date=${day}&start=${encodeURIComponent(resolved.startsAt)}&court=${encodeURIComponent(resolved.courtId)}`,
+          { replace: true },
+        );
+      }
+    }
+  }, [legacySlot, id, courtId, startParam, date, navigate]);
+
+  const { data: venue, isLoading: vLoading } = useQuery({
+    queryKey: ["venue", id],
+    queryFn: () => getVenue(id),
+    enabled: !!id,
+  });
+  const { data: court, isLoading: cLoading } = useQuery({
+    queryKey: ["court", courtId],
+    queryFn: () => getCourt(courtId!),
+    enabled: !!courtId,
   });
   const { data: services = [] } = useQuery({
     queryKey: ["services", id],
     queryFn: () => listVenueServices(id),
     enabled: !!id,
   });
+  const { data: slot, isLoading: sLoading } = useQuery({
+    queryKey: ["slot", courtId, startParam],
+    queryFn: () => findSlot(courtId!, startParam!),
+    enabled: !!courtId && !!startParam,
+  });
+
+  const isLoadingCtx = vLoading || cLoading || sLoading;
+  const slotUnavailable = !!slot && (slot.status !== "available" || slot.confirmedCount >= slot.capacity);
+  const slotIsPast = !!slot && new Date(slot.endsAt).getTime() < Date.now();
+  const cannotBook = !venue || !court || !slot || slotUnavailable || slotIsPast;
 
   const total = useMemo(() => {
-    if (!venue) return 0;
-    const slotPart = venue.basePriceCents * selectedSlots.size;
+    if (!venue || !slot) return 0;
+    const slotPart = venue.basePriceCents; // 单次预订 = 1 个 (court × session) = 1 个 slot
     const svcPart = services.reduce((sum, s) => sum + s.priceCents * (serviceQty[s.id] ?? 0), 0);
     return slotPart + svcPart;
-  }, [venue, selectedSlots, serviceQty, services]);
+  }, [venue, slot, serviceQty, services]);
 
   const submit = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("not_logged_in");
-      if (selectedSlots.size === 0) throw new Error("no_slots");
+      if (!slot) throw new Error("no_slot");
       const res = await createBooking({
         userId: user.id,
         venueId: id,
-        slotIds: [...selectedSlots],
+        slotIds: [slot.id],
         contactName,
         contactPhone,
         notes,
@@ -82,15 +144,16 @@ export function BookingPage() {
       return res.booking;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["slots", id] });
+      qc.invalidateQueries({ queryKey: ["sessions", id] });
       qc.invalidateQueries({ queryKey: ["my-bookings"] });
+      qc.invalidateQueries({ queryKey: ["slot", courtId, startParam] });
+      qc.invalidateQueries({ queryKey: ["courts", id] });
       setSubmitted(true);
-      // 不再自动跳转 —— 等用户在核销码弹窗里点 CTA 再走
     },
     onError: (e: Error) => {
       if (e.message.startsWith("sensitive:")) {
         setError(t("booking.submitBlocked", { words: e.message.slice("sensitive:".length) }));
-      } else if (e.message === "no_slots") {
+      } else if (e.message === "no_slot") {
         setError(t("booking.noSlotsSelected"));
       } else if (e.message === "slot_taken") {
         setError(t("booking.slotTaken"));
@@ -99,13 +162,6 @@ export function BookingPage() {
       }
     },
   });
-
-  // 已选 chip 被全部移除后，自动展开 picker 让用户重选
-  useEffect(() => {
-    if (!sLoading && selectedSlots.size === 0 && !showSlotPicker) {
-      setShowSlotPicker(true);
-    }
-  }, [sLoading, selectedSlots.size, showSlotPicker]);
 
   if (!user) {
     return (
@@ -124,7 +180,28 @@ export function BookingPage() {
       </div>
     );
   }
-  if (vLoading) {
+  if (!courtId || !startParam) {
+    return (
+      <div className="rounded-2xl border border-canvas-200 bg-white p-10 text-center">
+        <div className="text-4xl">🔎</div>
+        <h1 className="mt-3 font-display text-2xl text-ink-800">
+          {locale === "zh-CN" ? "请先在场次页选择场地" : "Pick a court on the venue page first"}
+        </h1>
+        <p className="mt-1 text-sm text-ink-500">
+          {locale === "zh-CN"
+            ? "回到场馆详情，点开场次，再选一片可加入的场地。"
+            : "Go back to the venue, expand a session, then pick an open court."}
+        </p>
+        <Link
+          to={`/venues/${id}`}
+          className="ig-stripe mt-5 inline-flex items-center justify-center gap-2 rounded-full px-5 py-2 text-sm font-semibold text-white shadow-softSm"
+        >
+          {t("booking.backToSlots")} →
+        </Link>
+      </div>
+    );
+  }
+  if (isLoadingCtx) {
     return (
       <div className="space-y-4">
         <div className="h-8 w-1/2 animate-pulse rounded bg-canvas-200/60" />
@@ -133,24 +210,34 @@ export function BookingPage() {
       </div>
     );
   }
-  if (!venue) {
+  if (!venue || !court || !slot) {
     return (
       <div className="rounded-2xl border border-canvas-200 bg-white p-10 text-center">
         <div className="text-4xl">🔎</div>
         <h1 className="mt-3 font-display text-2xl text-ink-800">{t("venues.notFoundTitle")}</h1>
+        <Link
+          to={`/venues/${id}`}
+          className="mt-4 inline-block text-sm text-ink-500 underline-offset-2 hover:underline"
+        >
+          {t("booking.backToSlots")}
+        </Link>
       </div>
     );
   }
 
+  const sessionTime = `${format(new Date(slot.startsAt), "HH:mm")}–${format(new Date(slot.endsAt), "HH:mm")}`;
+  const sessionDate = formatDate(slot.startsAt, locale);
+  const courtName = formatCourtName(court, locale);
+  const summaryAria = t("booking.summaryAria", {
+    venue: venue.name,
+    time: sessionTime,
+    court: courtName,
+    confirmed: slot.confirmedCount,
+    capacity: slot.capacity,
+  });
+
   return (
     <div className="space-y-5 pb-32">
-      {/* 头 */}
-      <div>
-        <p className="ig-eyebrow">{t("nav.appName")}</p>
-        <h1 className="mt-1 font-display text-[36px] leading-tight text-ink-800">{t("booking.title")}</h1>
-        <p className="mt-1 font-mono text-sm text-ink-500">⌖ {venue.name}</p>
-      </div>
-
       {submitted && (
         <CheckInModal
           phone={contactPhone}
@@ -158,104 +245,59 @@ export function BookingPage() {
         />
       )}
 
-      {/* 日期 + 时段 */}
-      <section className="rounded-2xl border border-canvas-200 bg-white p-5 shadow-softSm">
-        {showSlotPicker ? (
-          <>
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="ig-eyebrow">{t("venues.selectDate")}</p>
-                <h2 className="mt-1 font-display text-2xl text-ink-800">{t("venues.selectDate")}</h2>
-              </div>
-              <input
-                type="date"
-                value={date}
-                min={new Date().toISOString().slice(0, 10)}
-                onChange={(e) => {
-                  setDate(e.target.value);
-                  setSelectedSlots(new Set());
-                  setShowSlotPicker(true);
-                }}
-                className={clsx(inputCls, "w-auto")}
-              />
-            </div>
+      <div>
+        <p className="ig-eyebrow">{t("nav.appName")}</p>
+        <h1 className="mt-1 font-display text-[36px] leading-tight text-ink-800">{t("booking.title")}</h1>
+        <p className="mt-1 font-mono text-sm text-ink-500">⌖ {venue.name}</p>
+      </div>
 
-            <div className="ig-hairline mt-4" />
-
-            <p className="ig-eyebrow mt-4">{t("venues.selectSlots")}</p>
-            {sLoading ? (
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-                  <div key={i} className="h-10 animate-pulse rounded-full bg-canvas-200/60" />
-                ))}
+      {/* v3 只读 summary：球馆 + 场次时间 + 场地名 + 拼场进度 */}
+      <section
+        aria-label={summaryAria}
+        className="rounded-2xl border border-canvas-200 bg-white p-5 shadow-softSm"
+      >
+        <p className="ig-eyebrow">{t("booking.sessionTime")}</p>
+        <h2 className="mt-1 font-display text-2xl text-ink-800">
+          {sessionDate} · {sessionTime}
+        </h2>
+        <div className="ig-hairline mt-4" />
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <SummaryItem label={t("booking.court")} value={courtName} />
+          <SummaryItem
+            label={t("booking.courtProgress")}
+            value={
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-base text-ink-800">
+                  {slot.confirmedCount}/{slot.capacity}
+                </span>
+                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-canvas-200">
+                  <div
+                    className={clsx("h-full rounded-full", slotUnavailable ? "bg-ink-800" : "bg-football")}
+                    style={{ width: `${Math.max(6, Math.round((slot.confirmedCount / Math.max(1, slot.capacity)) * 100))}%` }}
+                    aria-hidden
+                  />
+                </div>
               </div>
-            ) : slots.length === 0 ? (
-              <div className="mt-3 rounded-xl border border-canvas-200 bg-canvas-50 p-6 text-center font-mono text-sm text-ink-500">
-                📅 {t("venues.noSlots")}
-              </div>
-            ) : (
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                {slots.map((s) => {
-                  const taken = s.status !== "available";
-                  const selected = selectedSlots.has(s.id);
-                  const time = formatDateTime(s.startsAt, locale).split(" ").pop() ?? "";
-                  return (
-                    <button
-                      key={s.id}
-                      disabled={taken}
-                      onClick={() => {
-                        setSelectedSlots((prev) => {
-                          const n = new Set(prev);
-                          if (n.has(s.id)) n.delete(s.id);
-                          else n.add(s.id);
-                          return n;
-                        });
-                      }}
-                      className={clsx(
-                        "rounded-full border px-3 py-2 text-sm font-mono tracking-wider transition",
-                        selected
-                          ? "ig-stripe border-transparent text-white shadow-softSm"
-                          : taken
-                            ? "border-canvas-200 bg-canvas-100 text-ink-400 cursor-not-allowed"
-                            : "border-canvas-200 bg-white text-ink-800 hover:border-ink-300 hover:-translate-y-0.5"
-                      )}
-                    >
-                      {time}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <p className="mt-3 font-mono text-[11px] tracking-wider text-ink-500">
-              {t("booking.selectedSlots")}: <span className="font-semibold text-ink-800">{selectedSlots.size}</span>
-            </p>
-          </>
-        ) : (
-          // 日期和时段都已经从 URL 确定 → 折叠成单行摘要，避免重复选择
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-            <div className="flex items-center gap-2">
-              <span aria-hidden>📅</span>
-              <span className="font-mono text-sm tracking-wider text-ink-800">{date}</span>
-            </div>
-            <span aria-hidden className="h-5 w-px bg-canvas-200" />
-            <div className="flex flex-wrap items-center gap-2">
-              {[...selectedSlots].map((slotId) => {
-                const slot = slots.find((s) => s.id === slotId);
-                if (!slot) return null;
-                const start = formatDateTime(slot.startsAt, locale).split(" ").pop() ?? "";
-                const end = formatDateTime(slot.endsAt, locale).split(" ").pop() ?? "";
-                return (
-                  <span
-                    key={slotId}
-                    className="ig-stripe inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-mono tracking-wider text-white shadow-softSm"
-                  >
-                    <span>{start}–{end}</span>
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        )}
+            }
+          />
+          <SummaryItem
+            label={t("venueDetail.fromPrice")}
+            value={
+              <span className="font-display text-base text-ink-800">
+                {formatMoney(venue.basePriceCents, locale)}
+              </span>
+            }
+          />
+        </div>
+        {slotIsPast ? (
+          <p className="mt-3 rounded-xl border border-canvas-200 bg-canvas-100 px-3 py-2 font-mono text-[11px] tracking-wider text-ink-500">
+            ⚠ {t("venueDetail.courtPast")}
+          </p>
+        ) : slotUnavailable ? (
+          <p className="mt-3 rounded-xl border border-squash/30 bg-squash-light px-3 py-2 font-mono text-[11px] tracking-wider text-squash-dark">
+            ⚠ {t("venueDetail.fullyBooked")}
+          </p>
+        ) : null}
       </section>
 
       {/* 附加服务 */}
@@ -368,7 +410,7 @@ export function BookingPage() {
                 setError(null);
                 submit.mutate();
               }}
-              disabled={submit.isPending || selectedSlots.size === 0}
+              disabled={submit.isPending || cannotBook}
               className="ig-stripe inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-softSm transition hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
             >
               {submit.isPending ? t("common.loading") : t("booking.submit")} →
@@ -380,19 +422,18 @@ export function BookingPage() {
   );
 }
 
-// 核销码弹窗 —— 预订成功时显示，用手机号后 4 位作为场主核销码
-//   - 居中卡片，背景遮罩 + blur
-//   - 大号 mono 数字 + 截图/记住提示
-//   - 单 CTA：去「我的预订」
-function CheckInModal({
-  phone,
-  onClose,
-}: {
-  phone: string;
-  onClose: () => void;
-}) {
+function SummaryItem({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-canvas-200 bg-canvas-50 p-3">
+      <p className="ig-eyebrow">{label}</p>
+      <div className="mt-1.5">{value}</div>
+    </div>
+  );
+}
+
+// 核销码弹窗
+function CheckInModal({ phone, onClose }: { phone: string; onClose: () => void }) {
   const { t } = useTranslation();
-  // 容错：手机号不足 4 位时显示占位，避免 NaN / 空
   const code = phone.replace(/\D/g, "").slice(-4).padStart(4, "•");
 
   return (
@@ -402,21 +443,14 @@ function CheckInModal({
       aria-labelledby="checkin-modal-title"
       className="fixed inset-0 z-30 flex items-center justify-center p-4"
     >
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div aria-hidden className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-sm rounded-2xl border border-canvas-200 bg-white p-6 shadow-soft">
         <div className="text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-football-light text-2xl">
             ✅
           </div>
           <p className="ig-eyebrow mt-3">{t("nav.appName")}</p>
-          <h2
-            id="checkin-modal-title"
-            className="mt-1 font-display text-2xl text-ink-800"
-          >
+          <h2 id="checkin-modal-title" className="mt-1 font-display text-2xl text-ink-800">
             {t("booking.checkInModalTitle")}
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-ink-600">

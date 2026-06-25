@@ -2,6 +2,7 @@
 // 替换策略：每个 export 函数都返回 Promise，可逐个换为 supabase.from(...).select()
 import type {
   Booking,
+  Court,
   Notification,
   OwnerApplication,
   Profile,
@@ -153,6 +154,43 @@ const seedVenues: Venue[] = [
   },
 ];
 
+// —— v3：场馆下属「场地 / court」预设 ——
+// 按场馆业务描述取「片」数；每家场馆起 1-6 片。
+const courtPlans: Record<string, { count: number; perCourtCapacity: number }> = {
+  v_sq_1: { count: 4, perCourtCapacity: 4 },   // 4 片国际标准壁球场
+  v_sq_2: { count: 2, perCourtCapacity: 2 },   // 2 片单打球场
+  v_sq_3: { count: 4, perCourtCapacity: 4 },
+  v_sq_4: { count: 4, perCourtCapacity: 4 },
+  v_fb_1: { count: 3, perCourtCapacity: 10 },  // 3 片五人制
+  v_fb_2: { count: 1, perCourtCapacity: 14 },  // 1 片 7 人制
+  v_fb_3: { count: 2, perCourtCapacity: 10 },  // 2 片五人制
+  v_bk_1: { count: 6, perCourtCapacity: 4 },   // 羽毛球（demo 上限 6）
+  v_bk_2: { count: 4, perCourtCapacity: 10 },
+  v_bk_3: { count: 3, perCourtCapacity: 10 },
+  v_bk_4: { count: 3, perCourtCapacity: 10 },
+  v_bk_5: { count: 2, perCourtCapacity: 6 },
+};
+
+// 场地命名辅助：0→A、1→B、…、25→Z、26→1、27→2 …
+export function courtLetter(i: number): string {
+  if (i < 26) return String.fromCharCode(65 + i);
+  return String(i - 25);
+}
+
+function genCourtsForVenue(v: Venue): Court[] {
+  const plan = courtPlans[v.id] ?? { count: 1, perCourtCapacity: v.capacity };
+  return Array.from({ length: plan.count }, (_, i) => ({
+    id: `c_${v.id}_${i}`,
+    venueId: v.id,
+    name_zh: `${courtLetter(i)} 场`,
+    name_en: `Court ${courtLetter(i)}`,
+    sortOrder: i,
+    capacity: plan.perCourtCapacity,
+    isActive: true,
+    createdAt: now(),
+  }));
+}
+
 const seedServices: VenueService[] = [
   { id: "s_1", venueId: "v_sq_1", name: "壁球拍租赁", priceCents: 2000, required: false },
   { id: "s_2", venueId: "v_sq_1", name: "护目镜",       priceCents: 1500, required: false },
@@ -161,8 +199,8 @@ const seedServices: VenueService[] = [
   { id: "s_5", venueId: "v_bk_3", name: "电子记分（场）", priceCents: 2000, required: false },
 ];
 
-// 为每个场馆预生成今天起 7 天 × 营业时段内的 slot
-function genSlotsForVenue(v: Venue): Slot[] {
+// 为每片 court × 7 天 × 营业时段生成 slot（v3 改）
+function genSlotsForCourts(v: Venue, courts: Court[]): Slot[] {
   const slots: Slot[] = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -183,29 +221,36 @@ function genSlotsForVenue(v: Venue): Slot[] {
     ) {
       const ts = new Date(t);
       const te = new Date(t.getTime() + step * 60_000);
-      // 用 (venueId, dayIndex, slotIndex) 当种子，确保「已确认数」刷新不跳
-      const rand = seededRand(`${v.id}|${d}|${ts.getTime()}`);
-      // 黄金档（周末 18-22 / 工作日 19-21）更容易被占满
-      const hour = ts.getHours();
-      const dow = ts.getDay();
-      const isPrime = (dow === 0 || dow === 6) ? hour >= 18 && hour < 22 : hour >= 19 && hour < 21;
-      const fillRatio = isPrime ? 0.55 + rand() * 0.45 : rand() * 0.7;
-      const confirmedCount = Math.min(v.capacity, Math.floor(v.capacity * fillRatio));
-      slots.push({
-        id: `sl_${v.id}_${ts.getTime()}`,
-        venueId: v.id,
-        startsAt: ts.toISOString(),
-        endsAt: te.toISOString(),
-        status: confirmedCount >= v.capacity ? "booked" : "available",
-        capacity: v.capacity,
-        confirmedCount,
-      });
+      for (const court of courts) {
+        if (!court.isActive) continue;
+        // 用 (courtId, dayIndex, ts) 当种子；同片场同时间跑出来的 confirmedCount 稳定
+        const rand = seededRand(`${court.id}|${d}|${ts.getTime()}`);
+        // 黄金档（周末 18-22 / 工作日 19-21）更容易被占满
+        const hour = ts.getHours();
+        const dow = ts.getDay();
+        const isPrime = (dow === 0 || dow === 6) ? hour >= 18 && hour < 22 : hour >= 19 && hour < 21;
+        const fillRatio = isPrime ? 0.55 + rand() * 0.45 : rand() * 0.7;
+        const confirmedCount = Math.min(court.capacity, Math.floor(court.capacity * fillRatio));
+        slots.push({
+          id: `sl_${court.id}_${ts.getTime()}`,
+          venueId: v.id,
+          courtId: court.id,
+          startsAt: ts.toISOString(),
+          endsAt: te.toISOString(),
+          status: confirmedCount >= court.capacity ? "booked" : "available",
+          capacity: court.capacity,
+          confirmedCount,
+        });
+      }
     }
   }
   return slots;
 }
 
-const seedSlots: Slot[] = seedVenues.flatMap(genSlotsForVenue);
+const seedCourts: Court[] = seedVenues.flatMap(genCourtsForVenue);
+const seedSlots: Slot[] = seedVenues.flatMap((v) =>
+  genSlotsForCourts(v, genCourtsForVenue(v)),
+);
 
 const seedBookings: Booking[] = [];
 const seedOwnerApps: OwnerApplication[] = [
@@ -221,6 +266,7 @@ const seedWords: SensitiveWord[] = [
 class Store {
   profiles: Profile[] = [...seedUsers];
   venues: Venue[] = [...seedVenues];
+  courts: Court[] = [...seedCourts];
   services: VenueService[] = [...seedServices];
   slots: Slot[] = [...seedSlots];
   bookings: Booking[] = [...seedBookings];
@@ -231,6 +277,7 @@ class Store {
   reset() {
     this.profiles = [...seedUsers];
     this.venues = [...seedVenues];
+    this.courts = [...seedCourts];
     this.services = [...seedServices];
     this.slots = [...seedSlots];
     this.bookings = [...seedBookings];

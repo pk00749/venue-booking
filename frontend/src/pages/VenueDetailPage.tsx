@@ -1,21 +1,22 @@
-// 场馆详情 —— IG 风延续
+// 场馆详情 —— IG 风延续（v3 重构为「球馆 → 场次 → 场地」三层）
 //   1) 头部：左 emoji 圆 + 大软色 art 块；右 eyebrow + sport mono + 标题 + 地址
-//   2) 4 列 stat 条：白底圆角（营业时间 / 容量 / 起价 / ID）
+//   2) 3 列 stat 条：营业时间 / 容量 / 起价
 //   3) 备注：白底 card，空时灰字「无」
-//   4) 日期 tabs：白底圆角 chips，active IG 渐变 + 白字
-//   5) 时段格子：4 列网格，白底圆角 + 时间 + 价格 + 进度条 + 状态 chip
-//   6) 服务行 + legend
-// 关键：保留 statFor() 业务逻辑（full/open/blocked），只换视觉
+//   4) 日期 tabs：白底圆角 chips
+//   5) 场次网格：每片 = HH:mm–HH:mm + "X/Y 片可加入" chip + 进度条
+//   6) 点击场次 → 下方内联展开「场地列表」（court 名 + X/Y + 状态 chip）
+//   7) 点击「可加入」的 court → /venues/:id/book?date=&start=&court=
+//   8) 过去场次：灰显 + 不可展开
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
 import { addDays, format, isToday, isTomorrow } from "date-fns";
-import { getVenue, listSlots, listVenueServices } from "@/features/venues/api";
+import { getVenue, listCourts, listSessions, listVenueServices, type Session } from "@/features/venues/api";
 import { EmptyState, Skeleton } from "@/components/ui";
 import { useUi } from "@/lib/store";
-import { formatMoney } from "@/lib/format";
-import type { Slot, SportType, Venue } from "@/lib/types";
+import { formatCourtName, formatMoney } from "@/lib/format";
+import type { Court, SportType, Venue } from "@/lib/types";
 import clsx from "clsx";
 
 type Visual = { emoji: string; light: string; glow: string; mono: string; ring: string; accent: string };
@@ -30,19 +31,6 @@ const SPORT_VISUAL: Record<SportType, Visual> = {
   other:       { emoji: "🎯", light: "bg-ink-100",        glow: "bg-ink-200",       mono: "OTHER",      ring: "ring-ink-200",  accent: "text-ink-700"       },
 };
 
-type SlotStat =
-  | { kind: "full"; capacity: number; confirmed: number }
-  | { kind: "open"; capacity: number; confirmed: number; missing: number }
-  | { kind: "blocked"; capacity: number; confirmed: number };
-
-function statFor(slot: Slot): SlotStat {
-  const cap = Math.max(1, slot.capacity);
-  const conf = Math.min(cap, slot.confirmedCount);
-  if (slot.status === "blocked") return { kind: "blocked", capacity: cap, confirmed: conf };
-  if (conf >= cap) return { kind: "full", capacity: cap, confirmed: conf };
-  return { kind: "open", capacity: cap, confirmed: conf, missing: cap - conf };
-}
-
 function VenueHeader({ venue, vis }: { venue: Venue; vis: Visual }) {
   const { t } = useTranslation();
   const priceValid = venue.basePriceCents > 0;
@@ -50,11 +38,9 @@ function VenueHeader({ venue, vis }: { venue: Venue; vis: Visual }) {
 
   return (
     <section className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
-      {/* 左：大 art 块 + emoji 圆 */}
       <div className="lg:col-span-5">
         <div className={clsx("relative overflow-hidden rounded-2xl border border-canvas-200", vis.light)}>
           <div className="flex h-full min-h-[280px] flex-col justify-between p-6">
-            {/* 顶部：64px emoji 圆 + mono label */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className={clsx("flex h-16 w-16 items-center justify-center rounded-full bg-white text-3xl ring-2", vis.ring)}>
@@ -64,15 +50,11 @@ function VenueHeader({ venue, vis }: { venue: Venue; vis: Visual }) {
               </div>
               <span className="font-mono text-[10px] tracking-[0.2em] text-ink-500">№ {idShort}</span>
             </div>
-
-            {/* 中部：大 emoji 中心 */}
             <div className="flex flex-1 items-center justify-center py-6">
               <span className="text-[110px] leading-none drop-shadow-sm" aria-hidden>
                 {vis.emoji}
               </span>
             </div>
-
-            {/* 底部：sport 名 + 状态 */}
             <div className="flex items-center justify-between">
               <span className={clsx("font-mono text-[11px] tracking-[0.2em]", vis.accent)}>
                 {t(`sport.${venue.sportType}`)}
@@ -87,7 +69,6 @@ function VenueHeader({ venue, vis }: { venue: Venue; vis: Visual }) {
         </div>
       </div>
 
-      {/* 右：标题 + 地址 + stat 条 */}
       <div className="space-y-5 lg:col-span-7">
         <div className="space-y-2">
           <p className="ig-eyebrow">{t("venueDetail.title")} · {t(`sport.${venue.sportType}`)}</p>
@@ -101,8 +82,6 @@ function VenueHeader({ venue, vis }: { venue: Venue; vis: Visual }) {
           {venue.address}
         </p>
 
-        {/* 4 列 stat 条 */}
-        {/* 3 列 stat 条（营业时间 / 容量 / 起价） */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Stat label={t("venueDetail.openHours")} value={<span className="whitespace-nowrap font-mono text-base text-ink-800">{venue.openTimeStart}–{venue.openTimeEnd}</span>} mono />
           <Stat
@@ -207,88 +186,156 @@ function DateTabs({
   );
 }
 
-function SlotTile({
-  slot,
-  t,
-  basePriceCents,
-  onPick,
+function SessionTile({
+  session,
+  expanded,
+  onToggle,
+  onPickCourt,
+  isPast,
 }: {
-  slot: Slot;
-  t: (k: string, opts?: Record<string, unknown>) => string;
-  basePriceCents: number;
-  onPick: (slotId: string) => void;
+  session: Session;
+  expanded: boolean;
+  onToggle: () => void;
+  onPickCourt: (court: Court) => void;
+  isPast: boolean;
 }) {
-  const stat = statFor(slot);
-  const start = new Date(slot.startsAt);
-  const end = new Date(slot.endsAt);
+  const { t } = useTranslation();
+  const locale = useUi((s) => s.locale);
+  const start = new Date(session.startsAt);
+  const end = new Date(session.endsAt);
   const time = `${format(start, "HH:mm")}–${format(end, "HH:mm")}`;
-  const fillPct = Math.round((stat.confirmed / stat.capacity) * 100);
-  // 过期判断改用结束时间：只要场次还没结束，用户仍可下订进半场
-  const isPast = end.getTime() < Date.now();
-  const disabled = isPast || stat.kind === "full" || stat.kind === "blocked";
-
-  const ariaLabel = isPast
-    ? t("venueDetail.slotExpiredAria", { time })
-    : stat.kind === "full"
-      ? t("venueDetail.slotFullAria")
-      : stat.kind === "blocked"
-        ? t("venueDetail.slotBlockedAria")
-        : t("venueDetail.bookSlotAria", { time });
+  const fullDay = format(start, locale === "zh-CN" ? "MM/dd EEE" : "MM/dd EE");
+  const taken = session.totalCourts - session.availableCourts;
+  const fillPct = session.totalCourts > 0
+    ? Math.round((taken / session.totalCourts) * 100)
+    : 0;
+  const disabled = isPast || session.totalCourts === 0;
 
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      aria-label={ariaLabel}
-      onClick={() => onPick(slot.id)}
+    <div
       className={clsx(
-        "group flex flex-col rounded-xl border bg-white p-3.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ink-300",
+        "rounded-xl border bg-white transition",
         disabled
-          ? "border-canvas-200 opacity-60 cursor-not-allowed"
-          : "border-canvas-200 hover:-translate-y-0.5 hover:border-ink-300 hover:shadow-softSm"
+          ? "border-canvas-200 opacity-60"
+          : expanded
+            ? "border-ink-300 shadow-softSm"
+            : "border-canvas-200 hover:-translate-y-0.5 hover:border-ink-300 hover:shadow-softSm"
       )}
     >
-      {/* 顶部：时间 + 价格 */}
-      <div className="flex items-baseline justify-between">
-        <span className="font-mono text-[14px] tracking-wider text-ink-800">{time}</span>
-        <span className="font-mono text-[11px] tracking-[0.14em] text-ink-500">
-          {basePriceCents > 0 ? formatMoney(basePriceCents, "zh-CN") : "—"}
-        </span>
-      </div>
-
-      {/* 进度条（4px 圆角，无边框） */}
-      <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-canvas-200">
-        <div
-          className={clsx("h-full rounded-full transition-all", stat.kind === "full" ? "bg-ink-800" : "bg-football")}
-          style={{ width: `${Math.max(6, fillPct)}%` }}
-          aria-hidden
-        />
-      </div>
-
-      {/* 底部：X/Y + 状态 chip */}
-      <div className="mt-2.5 flex items-center justify-between font-mono text-[11px]">
-        <span className="tracking-wider text-ink-600">
-          {stat.confirmed}/{stat.capacity}
-        </span>
-        {isPast ? (
-          <span className="rounded-full border border-canvas-200 bg-canvas-100 px-2 py-0.5 text-[10px] tracking-[0.14em] text-ink-500">
-            {t("venueDetail.slotExpired")}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-label={isPast ? t("venueDetail.sessionPastAria", { time }) : t("venueDetail.sessionExpandAria", { time })}
+        className="flex w-full items-center gap-3 rounded-xl p-3.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ink-300"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="font-mono text-[15px] tracking-wider text-ink-800">{time}</span>
+            <span className="font-mono text-[10px] tracking-[0.18em] text-ink-500">{fullDay}</span>
+          </div>
+          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-canvas-200">
+            <div
+              className={clsx(
+                "h-full rounded-full transition-all",
+                session.availableCourts === 0 ? "bg-ink-800" : "bg-football",
+              )}
+              style={{ width: `${Math.max(6, fillPct)}%` }}
+              aria-hidden
+            />
+          </div>
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {isPast ? (
+            <span className="rounded-full border border-canvas-200 bg-canvas-100 px-2 py-0.5 font-mono text-[10px] tracking-[0.14em] text-ink-500">
+              {t("venueDetail.courtPast")}
+            </span>
+          ) : session.availableCourts === 0 ? (
+            <span className="rounded-full bg-ink-800 px-2 py-0.5 font-mono text-[10px] tracking-[0.14em] text-white">
+              {t("venueDetail.fullyBooked")}
+            </span>
+          ) : (
+            <span className="rounded-full border border-ink-300 px-2 py-0.5 font-mono text-[10px] tracking-[0.14em] text-ink-800">
+              {t("venueDetail.courtsOpen", { available: session.availableCourts, total: session.totalCourts })}
+            </span>
+          )}
+          <span aria-hidden className={clsx("font-mono text-ink-500 transition", expanded && "rotate-90")}>
+            ›
           </span>
-        ) : stat.kind === "full" ? (
-          <span className="rounded-full bg-ink-800 px-2 py-0.5 text-[10px] tracking-[0.14em] text-white">
-            {t("venueDetail.fullyBooked")}
-          </span>
-        ) : stat.kind === "blocked" ? (
-          <span className="rounded-full border border-canvas-200 bg-canvas-100 px-2 py-0.5 text-[10px] tracking-[0.14em] text-ink-500">
-            —
-          </span>
-        ) : (
-          <span className="rounded-full border border-ink-300 px-2 py-0.5 text-[10px] tracking-[0.14em] text-ink-800">
-            {t("venueDetail.missing")} {stat.missing}
-          </span>
-        )}
-      </div>
-    </button>
+        </div>
+      </button>
+      {expanded && !disabled && (
+        <ul className="border-t border-canvas-200 divide-y divide-canvas-200">
+          {session.courts.map(({ court, slot }) => {
+            const slotIsPast = new Date(slot.endsAt).getTime() < Date.now();
+            const isFull = slot.confirmedCount >= slot.capacity || slot.status !== "available";
+            const joinable = !slotIsPast && !isFull;
+            const rowAria = slotIsPast
+              ? t("venueDetail.courtPast")
+              : isFull
+                ? t("venueDetail.courtBooked")
+                : t("venueDetail.courtAvailable");
+            const fillRow = Math.round((slot.confirmedCount / Math.max(1, slot.capacity)) * 100);
+            return (
+              <li key={court.id}>
+                <button
+                  type="button"
+                  disabled={!joinable}
+                  onClick={() => joinable && onPickCourt(court)}
+                  aria-label={`${formatCourtName(court, locale)} · ${t("venueDetail.courtProgress", { confirmed: slot.confirmedCount, capacity: slot.capacity })} · ${rowAria}`}
+                  className={clsx(
+                    "flex w-full items-center gap-3 px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ink-300",
+                    joinable
+                      ? "hover:bg-canvas-50"
+                      : "cursor-not-allowed",
+                  )}
+                >
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-canvas-100 font-mono text-[11px] tracking-wider text-ink-700">
+                    {formatCourtName(court, locale).replace(/\s.*$/, "")}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="truncate font-display text-[15px] text-ink-800">
+                        {formatCourtName(court, locale)}
+                      </span>
+                      <span className="font-mono text-[11px] tracking-wider text-ink-500">
+                        {t("venueDetail.courtProgress", { confirmed: slot.confirmedCount, capacity: slot.capacity })}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-canvas-200">
+                      <div
+                        className={clsx("h-full rounded-full", isFull ? "bg-ink-800" : "bg-football")}
+                        style={{ width: `${Math.max(6, fillRow)}%` }}
+                        aria-hidden
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-shrink-0 items-center gap-2">
+                    {slotIsPast ? (
+                      <span className="rounded-full border border-canvas-200 bg-canvas-100 px-2 py-0.5 font-mono text-[10px] tracking-[0.14em] text-ink-500">
+                        {t("venueDetail.courtPast")}
+                      </span>
+                    ) : isFull ? (
+                      <span className="rounded-full bg-ink-800 px-2 py-0.5 font-mono text-[10px] tracking-[0.14em] text-white">
+                        {t("venueDetail.courtBooked")}
+                      </span>
+                    ) : (
+                      <span className="rounded-full border border-ink-300 px-2 py-0.5 font-mono text-[10px] tracking-[0.14em] text-ink-800">
+                        {t("venueDetail.courtAvailable")}
+                      </span>
+                    )}
+                    {joinable && (
+                      <span aria-hidden className="font-mono text-ink-500">→</span>
+                    )}
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -303,15 +350,21 @@ export function VenueDetailPage() {
     d.setHours(0, 0, 0, 0);
     return format(d, "yyyy-MM-dd");
   });
+  const [expandedStart, setExpandedStart] = useState<string | null>(null);
 
   const { data: venue, isLoading: vLoading } = useQuery({
     queryKey: ["venue", id],
     queryFn: () => getVenue(id),
     enabled: !!id,
   });
-  const { data: slots = [], isLoading: sLoading } = useQuery({
-    queryKey: ["slots", id, date],
-    queryFn: () => listSlots(id, new Date(date).toISOString()),
+  const { data: courts = [] } = useQuery({
+    queryKey: ["courts", id],
+    queryFn: () => listCourts(id),
+    enabled: !!id,
+  });
+  const { data: sessions = [], isLoading: sLoading } = useQuery({
+    queryKey: ["sessions", id, date],
+    queryFn: () => listSessions(id, date),
     enabled: !!id,
   });
   const { data: services = [] } = useQuery({
@@ -329,10 +382,10 @@ export function VenueDetailPage() {
     });
   }, []);
 
-  const sortedSlots = useMemo(
-    () => [...slots].sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
-    [slots]
-  );
+  const setDateAndReset = (iso: string) => {
+    setDate(iso);
+    setExpandedStart(null);
+  };
 
   if (vLoading) {
     return (
@@ -354,6 +407,7 @@ export function VenueDetailPage() {
   }
 
   const vis = SPORT_VISUAL[venue.sportType];
+  const now = Date.now();
 
   return (
     <div className="space-y-7 pb-20">
@@ -362,41 +416,53 @@ export function VenueDetailPage() {
       <NotesBlock notes={venue.notes} />
 
       <section className="space-y-4">
-        {/* 段头 */}
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="ig-eyebrow">{t("venueDetail.timeSlots")}</p>
             <h2 className="mt-1 font-display text-[28px] leading-tight text-ink-800">
-              {locale === "zh-CN" ? "选择时段" : "Pick a slot"}
+              {locale === "zh-CN" ? "选择场次" : "Pick a session"}
             </h2>
           </div>
+          {courts.length > 0 && (
+            <span className="rounded-full border border-canvas-200 bg-white px-3 py-1 font-mono text-[11px] tracking-[0.16em] text-ink-600">
+              {t("owner.courtCount", { n: courts.length })}
+            </span>
+          )}
         </div>
 
-        <DateTabs dates={dateOptions} value={date} onChange={setDate} />
+        <DateTabs dates={dateOptions} value={date} onChange={setDateAndReset} />
 
         {sLoading ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-              <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          <div className="space-y-2">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-16 w-full rounded-xl" />
             ))}
           </div>
-        ) : sortedSlots.length === 0 ? (
-          <EmptyState icon="∅" title={t("venueDetail.noSlots")} />
+        ) : sessions.length === 0 ? (
+          <EmptyState icon="∅" title={t("venueDetail.noSessions")} />
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {sortedSlots.map((s) => (
-              <SlotTile
-                key={s.id}
-                slot={s}
-                t={t}
-                basePriceCents={venue.basePriceCents}
-                onPick={(slotId) => navigate(`/venues/${venue.id}/book?date=${date}&slot=${slotId}`)}
-              />
-            ))}
+          <div className="space-y-2">
+            {sessions.map((s) => {
+              const isPast = new Date(s.endsAt).getTime() < now;
+              return (
+                <SessionTile
+                  key={s.startsAt}
+                  session={s}
+                  expanded={expandedStart === s.startsAt}
+                  onToggle={() =>
+                    setExpandedStart((cur) => (cur === s.startsAt ? null : s.startsAt))
+                  }
+                  onPickCourt={(court) => {
+                    const start = encodeURIComponent(s.startsAt);
+                    navigate(`/venues/${venue.id}/book?date=${date}&start=${start}&court=${encodeURIComponent(court.id)}`);
+                  }}
+                  isPast={isPast}
+                />
+              );
+            })}
           </div>
         )}
 
-        {/* Legend */}
         <div className="ig-hairline pt-3">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] tracking-[0.18em] text-ink-500">
             <span className="flex items-center gap-2">
@@ -408,7 +474,7 @@ export function VenueDetailPage() {
               {t("venueDetail.fullyBooked")}
             </span>
             <span className="ml-auto">
-              {t("venueDetail.missing")} = {t("venueDetail.capacity")} − {t("venueDetail.confirmed")}
+              {locale === "zh-CN" ? "点击场次展开可选场地" : "Tap a session to expand courts"}
             </span>
           </div>
         </div>
@@ -438,7 +504,6 @@ export function VenueDetailPage() {
         </section>
       )}
 
-      {/* 底部 sticky：与 BookingPage 一致的返回按钮 */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-canvas-200 bg-white/95 shadow-[0_-2px_18px_rgba(0,0,0,0.06)] backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
           <Link

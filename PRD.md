@@ -157,11 +157,15 @@
 - CTA：「选择时段预订」→ 跳 `/venues/:id/booking`
 
 #### US-103 选择时段并下单（P0）
-- 选日期（不可选过去日期，不可超 30 天）
-- 选 1 个或多个连续/非连续时段（每个场地按 `slot_duration` 切分）
+- 预订流程按 **球馆 → 场次 → 场地** 三步走：
+  1. 球馆：`/venues/:id` 选择目标场馆
+  2. 场次：选择日期 + 时段（`starts_at` ~ `ends_at`），对应一个 venue-level 时间窗口
+  3. 场地：在该场次下选择具体可订的 **场地（court）**；场主在创建场馆时命名（"A 场 / B 场 / 1 号场" 等），编号规则由场主决定
+- 选 1 个或多个连续/非连续 **场地 × 场次** 组合；每个场地按 `slot_duration_minutes` 切分
 - 选附加服务（可改数量）
 - 填联系人姓名、手机号（仅当次预订使用，不入用户 profile）
 - 提交后状态机：`pending`（如 `require_approval`）或 `confirmed`
+- MVP 单次预订至少 1 个 (court × session)；不支持同一场地跨场次打包
 
 #### US-104 我的预订（P0）
 - 列表：未来/历史两 tab
@@ -268,8 +272,11 @@ profiles ──────────┐
    ▼
 venues ── 1:N ── venue_services
    │ 1:N
+  ▼
+courts (球馆下属场地，场主命名：A/B/C…，决定 sort_order)
+   │ 1:N
    ▼
-slots (按 venue + date_range 预生成)
+slots (按 court + date_range 预生成；唯一约束 (court_id, starts_at))
    │ 1:N
    ▼
 bookings ── N:M ── booking_services (join with venue_services)
@@ -341,17 +348,33 @@ audit_logs       (无 FK，记录所有 admin/owner 关键动作)
 | required | boolean default false | 是否必选 |
 | created_at | timestamptz default now() | |
 
+#### `courts`
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| venue_id | uuid FK → venues.id on delete cascade | 隶属场馆 |
+| name | text | 场主命名（A 场 / B 场 / Court 1 …）；编号规则由场主决定 |
+| sort_order | int default 0 | 列表/选择时的稳定排序 |
+| capacity | int default 4 check (>0) | 单场可容纳人数（展示用） |
+| is_active | boolean default true | 软停用；停用后该 court 不再展示 |
+| created_at | timestamptz default now() | |
+| updated_at | timestamptz default now() | trigger 维护 |
+
+> 设计要点：`capacity` 是场地物性（"这片场最多能打 4 人"），不是预订占位计数。
+> `is_active = false` 时该 court 的 slot 仍存在但不出现在前端选择。
+
 #### `slots`
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | id | uuid PK | |
 | venue_id | uuid FK → venues.id on delete cascade | |
+| court_id | uuid FK → courts.id on delete cascade | 隶属场地 |
 | starts_at | timestamptz | |
 | ends_at | timestamptz | |
 | status | text check in ('available','held','booked','blocked') default 'available' | |
-| unique(venue_id, starts_at) | | 防重复 |
+| unique(court_id, starts_at) | | 防重复（同片场同一时刻只能有一个 slot） |
 
-> 预生成策略：每次预订前实时按 `venue.slot_duration_minutes` 切分；不再做"slot 模板"表。
+> 预生成策略：每次预订前实时按 `venue.slot_duration_minutes` 切分；遍历 venue 下所有 active courts × 营业时段。
 > 锁定：用户进入下单页时对所选 slot `status = 'held'`（10 分钟超时），支付/确认后改 `booked`。
 
 #### `bookings`
@@ -419,7 +442,9 @@ audit_logs       (无 FK，记录所有 admin/owner 关键动作)
 
 - `venues(status, sport_type)` — 列表筛选
 - `venues(owner_id)` — 场主看自己场地
-- `slots(venue_id, starts_at)` — 时段查询主路径
+- `courts(venue_id, sort_order)` — 场馆详情 / 创建表单拉取场地列表
+- `slots(court_id, starts_at)` — 时段查询主路径
+- `slots(venue_id, starts_at)` — 跨场地的场次聚合
 - `slots(status, starts_at)` partial where status = 'available' — 找可用时段
 - `bookings(user_id, created_at desc)` — 我的预订
 - `bookings(venue_id, created_at desc)` — 场主看板
@@ -444,24 +469,28 @@ audit_logs       (无 FK，记录所有 admin/owner 关键动作)
 - `UPDATE`：仅 `owner_id = auth.uid()` 或 admin
 - `DELETE`：仅 admin（实际用 `status = 'inactive'` 软删）
 
-### 6.3 `slots`
+### 6.3 `courts`
+- `SELECT`：所有人可看 `is_active = true`；owner 可看自己场馆的全部；admin 可看全部
+- `INSERT/UPDATE/DELETE`：仅 `venues.owner_id = auth.uid()` 或 admin
+
+### 6.4 `slots`
 - `SELECT`：所有人
 - `UPDATE`：仅 Edge Function 用 service_role；普通用户不直改
 - `INSERT/DELETE`：仅 service_role 或 owner（自己场地）
 
-### 6.4 `bookings`
+### 6.5 `bookings`
 - `SELECT`：`user_id = auth.uid()` 或 `venue.owner_id = auth.uid()` 或 admin
 - `INSERT`：`auth.uid() = user_id` 且 `auth.uid()` role in ('user','owner','admin')
 - `UPDATE`：user 可改 `status` 当 `pending → cancelled` 且满足 `cancel_hours`；owner 可改 `pending → confirmed/rejected`；admin 全权
 - `DELETE`：禁止
 
-### 6.5 `owner_applications`
+### 6.6 `owner_applications`
 - `SELECT`：申请人自己或 admin
 - `INSERT`：仅自己
 - `UPDATE`：仅 admin 改 status
 - `DELETE`：禁止
 
-### 6.6 `notifications`
+### 6.7 `notifications`
 - `SELECT/UPDATE`（read_at）：仅 `user_id = auth.uid()`
 - `INSERT`：仅 service_role
 
@@ -793,11 +822,11 @@ client.submit(...)
 
 **3. `VenueDetailPage`（`/venues/:id`）**
 - 鉴权：公开
-- 作用：场馆详情 + 时段选择
-- 关键功能：头部 + 4 列 stat 条 + 备注 + 7 天日期 tabs + 时段网格（`SlotTile`） + 附加服务列表
-- 核心逻辑：`useQuery getVenue` / `listSlots` / `listVenueServices` → 按 `startsAt` 排序 → `SlotTile` 状态由 `statFor(slot)` 计算 → **过期判断** `start.getTime() < Date.now()` 决定 `isPast`，灰显 + 不可点击 + 状态 chip `venueDetail.slotExpired`（"已过期" / "Past"）→ 点击跳 `/venues/:id/book?date=&slot=`
-- i18n 新增 key：`venueDetail.slotExpired`、`venueDetail.slotExpiredAria`
-- 显示信息：场馆名 + 运动 mono + 地址 + 营业时间 + 容量 + 起价 + ID + 备注 + 日期 tabs（TH 06/18 / 今日 06/19 / 明日 06/20 / SU / MO / TU / WE）+ 时段网格（X / Y + 进度条 + 状态 chip）+ 附加服务（必选项 chip + 价格）
+- 作用：场馆详情 + 「场次 / 场地」三层选择入口（v0.3 起）
+- 关键功能：头部 + stat 条 + 备注 + 7 天日期 tabs + **场次网格（`SessionTile`，每个场次展示时间 + 可用场地数）** + **场次展开后的场地列表（`CourtTile`，每片场地展示名称 / 状态 / 起价）** + 附加服务列表
+- 核心逻辑：`useQuery getVenue` / `listSessions(venueId, date)` / `listCourts(venueId)` / `listVenueServices` → 按 `startsAt` 聚合为 venue-level 场次 → `SessionTile` 显示 `available / total` 场地计数 → 展开后展示该场次下每个 `Court` 的 `SlotTile`（status: available / booked / past）→ 点击可用场地跳 `/venues/:id/book?date=&start=&court=<courtId>`
+- i18n 新增 key：`venueDetail.session` / `venueDetail.courtsAvailable` / `venueDetail.pickCourt` / `venueDetail.courtBooked` / `venueDetail.courtExpired` 等
+- 显示信息：场馆名 + 运动 mono + 地址 + 营业时间 + 起价 + 备注 + 日期 tabs（7 天）+ **场次网格**（HH:mm–HH:mm + 可订场地计数 chip）+ **展开的场地列表**（场主命名 + 状态 chip + 价格）+ 附加服务
 
 **4. `LoginPage`（`/login`）**
 - 鉴权：公开
@@ -823,9 +852,9 @@ client.submit(...)
 
 **7. `BookingPage`（`/venues/:id/book`，`RequireAuth`）**
 - 鉴权：需登录（任意角色）
-- 作用：单时段预订确认
+- 作用：单场地 × 单场次 预订确认（v0.3 起，URL 改为 `?date=&start=&court=`）
 - 关键功能：联系人表单（姓名 + 手机号 11 位校验） + 附加服务多选 + 合计 + 提交
-- 核心逻辑：URL 拿 `date` / `slot` → 校验手机号 11 位正则 → `submitBooking` → 成功跳 `/my-bookings`；slot 已被占时跳回详情页 + 提示 *(v0.2 单时段：mock 阶段只支持单 slot；多 slot / Hold 在 Supabase 阶段实现，对应 §4.3 US-103)*
+- 核心逻辑：URL 拿 `date` / `start` / `court` → 校验手机号 11 位正则 → `createBooking` → 成功跳 `/my-bookings`；该 court × start 已被占时跳回详情页 + 提示；保留对历史 `?slot=` 链接的兼容（自动重定向到新格式）
 - i18n 新增 key：`booking.backToSlots`（"返回时段" / "Back to slots"，底部固定条左按钮使用）
 - 显示信息：场馆名 + 时段摘要（"周X MM/dd HH:mm–HH:mm"）+ 联系人姓名 / 手机号 / 备注 + 附加服务多选（必选项置灰）+ 合计（占位不收款）+ 底部固定条（左 `booking.backToSlots` + 右合计金额 + 提交按钮）
 
@@ -882,7 +911,7 @@ client.submit(...)
 - 核心逻辑：`listAllPendingBookings` + `reviewBooking(id, "confirm" | "reject")` *(v0.2 mock)*
 - 显示信息：标题 + 列表（场馆名 + 时段 + 申请人 + 批准 / 拒绝按钮）；空状态显示 ✨
 
-### 15.4 v0.2 mock 阶段特别说明
+### 15.4 v0.3 mock 阶段特别说明（球场×场次×场地三层预订）
 
 - **数据源**：所有 `*Api` 走 `frontend/src/lib/mock-data.ts`（内存数据 + 模拟延迟），**不**调 Supabase；接口形态按 Supabase 风格写，便于后续切换。
 - **登录态**：`useSession`（zustand）存内存中，刷新即重置；`localStorage` 持久化版本在 mock 阶段已可用，Supabase 接入后由 `supabase.auth` 接管。
@@ -891,6 +920,21 @@ client.submit(...)
   - `booking.backToSlots`（新增，替代历史 `backToVenue`）
   - `venueDetail.slotExpired` / `venueDetail.slotExpiredAria`（新增，"已过期" 状态 + 无障碍标签）
   - `myBookings.tabUpcoming` 文案由"已预订但没开场"精简为"已预订"
+  - **v0.3 新增 i18n key**：
+    - `venueDetail.session` / `venueDetail.courtsAvailable`（"场次" / "可订场地"）
+    - `venueDetail.pickCourt` / `venueDetail.courtBooked` / `venueDetail.courtExpired` / `venueDetail.courtAvailable`（场地状态）
+    - `booking.court` / `booking.session`（预订页顶部显示场地名 / 场次时间）
+    - `myBookings.court` / `owner.courts` / `admin.court`（各列表新增场地名）
+    - `ownerForm.courtNames` / `ownerForm.courtNamesHint`（场主创建场馆时命名场地）
+    - `courts.*`（场地物性字段：容量、命名）
+    - `bottomBar.courtsCount` 文案由 "片场馆" 改为 "片场地"（指 venue 数量），避免歧义
+- **v0.3 数据模型变更**：
+  - 新增 `courts` 表（id / venue_id / name / sort_order / capacity / is_active）
+  - `slots` 新增 `court_id`，唯一约束改为 `unique(court_id, starts_at)`
+  - `mock-data` 默认每个场馆生成 2–4 片场地，命名 "A 场 / B 场 / 1 号场" 等
+- **v0.3 路由变更**：
+  - `VenueDetailPage` 仍是 `/venues/:id`（公开）
+  - `BookingPage` URL 由 `?date=&slot=` 变更为 `?date=&start=&court=`，保留旧 `?slot=` 链接向后兼容（解析后重定向）
 - **本期移除的 UI 元素**：`MyBookingsPage` 顶部"去找场"按钮、`VenueDetailPage` 顶部"返回场馆列表"链接（由全局 `nav.venues` / 浏览器后退替代，避免与全局 nav 重复）。
 - **本期迁移到 `PageBottomBar` 的元素**：`VenuesPage` 顶部"返回选运动"链接迁到 `PageBottomBar.leading`（同样由全局 `nav.home` / 浏览器后退可替代，避免顶部重复占位）。
 
@@ -901,3 +945,4 @@ client.submit(...)
 | 日期 | 版本 | 变更人 | 变更内容 |
 | --- | --- | --- | --- |
 | 2026-06-08 | v0.1.0 | Codex | 初稿，覆盖 10 条已确认决策；待用户评审 |
+| 2026-06-26 | v0.3.0 | Codex | 引入 `courts` 实体；预订流程改为「球馆 → 场次 → 场地」三层；US-103 / §5 / §6.3 / §15.3 同步修订 |

@@ -98,6 +98,10 @@
     "backToVenue": "返回场馆",
     "phoneInvalid": "请输入有效的 11 位手机号",
     "backToSlots": "返回时段",
+    "court": "场地",
+    "sessionTime": "场次时间",
+    "courtProgress": "拼场进度",
+    "summaryAria": "已选：{{venue}} · {{time}} · {{court}} · {{confirmed}}/{{capacity}}",
     "checkInModalTitle": "预订成功",
     "checkInModalSubtitle": "请使用下方核销码，到场后向场主出示核销",
     "checkInCodeLabel": "核销码",
@@ -117,7 +121,8 @@
     "emptyUpcoming": "还没开场的预订",
     "notesLabel": "备注",
     "emptyHistory": "已结束的预订",
-    "emptyBody": "去场馆列表看看？选择时段就可以预订了。"
+    "emptyBody": "去场馆列表看看？选择时段就可以预订了。",
+    "court": "场地"
   },
   "auth": {
     "loginTitle": "登录账号",
@@ -157,7 +162,9 @@
     "emptyVenues": "还没有创建任何场馆",
     "emptyVenuesBody": "点击右上「新建场馆」开始入驻",
     "emptyPending": "没有待审预订",
-    "emptyPendingBody": "用户提交预订后会出现在这里"
+    "emptyPendingBody": "用户提交预订后会出现在这里",
+    "courtCount": "{{n}} 片场地",
+    "courtProgress": "场地"
   },
   "admin": {
     "dashboard": "数据看板",
@@ -190,7 +197,8 @@
     "emptyApps": "暂无相关申请",
     "emptyWords": "词库为空，先添加一个敏感词",
     "emptyPending": "没有待审预订",
-    "emptyPendingBody": "全网预订已处理完毕"
+    "emptyPendingBody": "全网预订已处理完毕",
+    "court": "场地"
   },
   "ownerApp": {
     "title": "成为场主",
@@ -241,7 +249,10 @@
     "slotDuration": "时段长度（分钟）",
     "basePrice": "起价（元）",
     "cancel": "取消",
-    "rejectDefaultReason": "场馆不可用"
+    "rejectDefaultReason": "场馆不可用",
+    "courtNamesZh": "场地名称（中文，一行一片）",
+    "courtNamesEn": "Court names (English, one per line)",
+    "courtNamesHint": "默认 4 片 A–D 场；按行对齐裁剪，单边缺失时回退自动字母"
   },
   "ownerOnly": {
     "title": "仅场主可访问",
@@ -293,7 +304,19 @@
     "slotFullAria": "已满员，不可预约",
     "slotBlockedAria": "不可用",
     "slotExpired": "已过期",
-    "slotExpiredAria": "{{time}} 已过期，不可预约"
+    "slotExpiredAria": "{{time}} 已过期，不可预约",
+    "session": "场次",
+    "sessionTime": "场次时间",
+    "courtsOpen": "{{available}}/{{total}} 片可加入",
+    "pickCourt": "选择场地",
+    "courtAvailable": "可加入",
+    "courtBooked": "已满",
+    "courtPast": "已过期",
+    "courtProgress": "{{confirmed}}/{{capacity}} 满",
+    "courtProgressAria": "{{confirmed}} / {{capacity}}",
+    "noSessions": "所选日期暂无场次",
+    "sessionPastAria": "{{time}} 已过期",
+    "sessionExpandAria": "展开 {{time}} 的可选场地"
   },
   "bottomBar": {
     "browseAll": "浏览全部",

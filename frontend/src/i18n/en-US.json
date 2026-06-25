@@ -98,6 +98,10 @@
     "backToVenue": "Back to venue",
     "phoneInvalid": "Please enter a valid 11-digit phone number",
     "backToSlots": "Back to slots",
+    "court": "Court",
+    "sessionTime": "Session time",
+    "courtProgress": "Group progress",
+    "summaryAria": "Selected: {{venue}} · {{time}} · {{court}} · {{confirmed}}/{{capacity}}",
     "checkInModalTitle": "Booking confirmed",
     "checkInModalSubtitle": "Show this code to the venue owner on arrival to check in",
     "checkInCodeLabel": "Check-in code",
@@ -117,7 +121,8 @@
     "emptyUpcoming": "Nothing booked, nothing waiting to start",
     "notesLabel": "Notes",
     "emptyHistory": "Nothing booked has wrapped up yet",
-    "emptyBody": "Browse venues and pick a slot to get started."
+    "emptyBody": "Browse venues and pick a slot to get started.",
+    "court": "Court"
   },
   "auth": {
     "loginTitle": "Log in",
@@ -157,7 +162,9 @@
     "emptyVenues": "No venues yet",
     "emptyVenuesBody": "Click \"New venue\" to start onboarding",
     "emptyPending": "No pending bookings",
-    "emptyPendingBody": "New bookings will appear here for review"
+    "emptyPendingBody": "New bookings will appear here for review",
+    "courtCount": "{{n}} courts",
+    "courtProgress": "Court"
   },
   "admin": {
     "dashboard": "Dashboard",
@@ -190,7 +197,8 @@
     "emptyApps": "No applications in this state",
     "emptyWords": "No words yet — add one to start",
     "emptyPending": "No pending bookings",
-    "emptyPendingBody": "All bookings have been reviewed"
+    "emptyPendingBody": "All bookings have been reviewed",
+    "court": "Court"
   },
   "ownerApp": {
     "title": "Become an owner",
@@ -241,7 +249,10 @@
     "slotDuration": "Slot length (min)",
     "basePrice": "Base price",
     "cancel": "Cancel",
-    "rejectDefaultReason": "Venue unavailable"
+    "rejectDefaultReason": "Venue unavailable",
+    "courtNamesZh": "Court names (Chinese, one per line)",
+    "courtNamesEn": "Court names (English, one per line)",
+    "courtNamesHint": "Defaults to 4 courts A–D; rows are aligned line-by-line, missing entries fall back to auto letters"
   },
   "ownerOnly": {
     "title": "Owners only",
@@ -293,7 +304,19 @@
     "slotFullAria": "Full, not bookable",
     "slotBlockedAria": "Unavailable",
     "slotExpired": "Past",
-    "slotExpiredAria": "{{time}} has passed, not bookable"
+    "slotExpiredAria": "{{time}} has passed, not bookable",
+    "session": "Session",
+    "sessionTime": "Session time",
+    "courtsOpen": "{{available}}/{{total}} courts open",
+    "pickCourt": "Pick a court",
+    "courtAvailable": "Open",
+    "courtBooked": "Full",
+    "courtPast": "Past",
+    "courtProgress": "{{confirmed}}/{{capacity}} full",
+    "courtProgressAria": "{{confirmed}} / {{capacity}}",
+    "noSessions": "No sessions on this date",
+    "sessionPastAria": "{{time}} has passed",
+    "sessionExpandAria": "Expand courts for {{time}}"
   },
   "bottomBar": {
     "browseAll": "Browse all",

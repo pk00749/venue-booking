@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useSession, useUi } from "@/lib/store";
 import { listMyBookings, cancelBooking } from "@/features/bookings/api";
 import { store } from "@/lib/mock-data";
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatCourtName, formatDateTime, formatMoney } from "@/lib/format";
 import type { Booking, SportType } from "@/lib/types";
 import clsx from "clsx";
 
@@ -189,7 +189,18 @@ export function MyBookingsPage() {
                     <div className="mt-1 space-y-0.5 font-mono text-[12px] text-ink-500">
                       {b.slotIds.map((sid) => {
                         const sl = store.slots.find((s) => s.id === sid);
-                        return sl ? <div key={sid}>🕒 {formatDateTime(sl.startsAt, locale)}</div> : null;
+                        if (!sl) return null;
+                        const court = store.courts.find((c) => c.id === sl.courtId);
+                        return (
+                          <div key={sid} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span>🕒 {formatDateTime(sl.startsAt, locale)}</span>
+                            {court && (
+                              <span className="rounded-full bg-canvas-100 px-1.5 py-0.5 text-[10px] tracking-wider text-ink-700">
+                                {t("myBookings.court")}: {formatCourtName(court, locale)}
+                              </span>
+                            )}
+                          </div>
+                        );
                       })}
                     </div>
                     <div className="mt-1.5 text-[13px] text-ink-700">

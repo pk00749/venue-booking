@@ -8,11 +8,11 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession, useUi } from "@/lib/store";
-import { createVenue, listVenuesByOwner } from "@/features/venues/api";
+import { createVenue, listCourts, listVenuesByOwner } from "@/features/venues/api";
 import { listPendingBookingsForOwner, reviewBooking } from "@/features/bookings/api";
 import { store } from "@/lib/mock-data";
 import { SPORT_TYPES, type SportType } from "@/lib/types";
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatCourtName, formatDateTime, formatMoney } from "@/lib/format";
 
 const SPORT_LABEL_KEY: Record<SportType, string> = {
   squash: "sport.squash",
@@ -124,11 +124,12 @@ export function OwnerConsolePage() {
                     </span>
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-ink-800">{v.name}</div>
-                      <div className="mt-0.5 flex items-center gap-2">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-mono uppercase tracking-wide ${vis.light} ${vis.accent}`}>
                           {vis.mono}
                         </span>
                         <span className="text-xs text-ink-500">{t(SPORT_LABEL_KEY[v.sportType])}</span>
+                        <CourtCountChip venueId={v.id} />
                       </div>
                     </div>
                   </div>
@@ -182,7 +183,10 @@ export function OwnerConsolePage() {
                         {b.slotIds
                           .map((sid) => {
                             const sl = store.slots.find((s) => s.id === sid);
-                            return sl ? formatDateTime(sl.startsAt, locale) : null;
+                            if (!sl) return null;
+                            const court = store.courts.find((c) => c.id === sl.courtId);
+                            const courtName = court ? formatCourtName(court, locale) : "—";
+                            return `${formatDateTime(sl.startsAt, locale)} · ${t("owner.courtProgress")} ${courtName}`;
                           })
                           .filter(Boolean)
                           .join(" · ")}
@@ -236,6 +240,8 @@ function CreateVenueForm({ onDone }: { onDone: () => void }) {
   const [openTimeEnd, setOpenTimeEnd] = useState("22:00");
   const [slotDuration, setSlotDuration] = useState<30 | 60 | 90 | 120>(60);
   const [basePrice, setBasePrice] = useState("80");
+  const [courtsZh, setCourtsZh] = useState("A 场\nB 场\nC 场\nD 场");
+  const [courtsEn, setCourtsEn] = useState("Court A\nCourt B\nCourt C\nCourt D");
   const [err, setErr] = useState<string | null>(null);
 
   const m = useMutation({
@@ -253,6 +259,7 @@ function CreateVenueForm({ onDone }: { onDone: () => void }) {
         cancelHours: 2,
         basePriceCents: Math.round(Number(basePrice) * 100),
         capacity: 4,
+        courts: parseCourtInputs(courtsZh, courtsEn),
       }),
     onSuccess: (r) => {
       if (r.ok) onDone();
@@ -332,6 +339,31 @@ function CreateVenueForm({ onDone }: { onDone: () => void }) {
             className={inputCls + " mt-1"}
           />
         </div>
+        <div className="sm:col-span-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="text-xs font-medium text-ink-600">{t("ownerForm.courtNamesZh")}</label>
+            <textarea
+              rows={4}
+              value={courtsZh}
+              onChange={(e) => setCourtsZh(e.target.value)}
+              placeholder={"A 场\nB 场\nC 场\nD 场"}
+              className={inputCls + " mt-1 font-mono"}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-ink-600">{t("ownerForm.courtNamesEn")}</label>
+            <textarea
+              rows={4}
+              value={courtsEn}
+              onChange={(e) => setCourtsEn(e.target.value)}
+              placeholder={"Court A\nCourt B\nCourt C\nCourt D"}
+              className={inputCls + " mt-1 font-mono"}
+            />
+          </div>
+          <p className="sm:col-span-2 font-mono text-[11px] tracking-wider text-ink-500">
+            {t("ownerForm.courtNamesHint")}
+          </p>
+        </div>
       </div>
       {err && (
         <div className="mt-4 rounded-xl border border-squash bg-squash-light px-3.5 py-2.5 text-sm text-squash-dark">
@@ -355,4 +387,46 @@ function CreateVenueForm({ onDone }: { onDone: () => void }) {
       </div>
     </div>
   );
+}
+
+// 列出该场馆的 active court 数（不取 sortOrder 详情，只数片数）
+function CourtCountChip({ venueId }: { venueId: string }) {
+  const { t } = useTranslation();
+  const { data: courts = [] } = useQuery({
+    queryKey: ["courts", venueId],
+    queryFn: () => listCourts(venueId),
+    enabled: !!venueId,
+  });
+  if (courts.length === 0) return null;
+  return (
+    <span className="rounded-full border border-canvas-200 bg-canvas-50 px-2 py-0.5 font-mono text-[10px] tracking-wider text-ink-600">
+      {t("owner.courtCount", { n: courts.length })}
+    </span>
+  );
+}
+
+// 把两个 textarea（中文 / 英文，每行一个）按行对齐裁剪成 court 输入
+// 单边缺失的行回退到自动字母（A / B / C…）
+function parseCourtInputs(
+  zh: string,
+  en: string,
+): { name_zh: string; name_en: string }[] {
+  const split = (s: string) =>
+    s.split(/\r?\n/).map((x) => x.trim()).filter((x) => x.length > 0);
+  const linesZh = split(zh);
+  const linesEn = split(en);
+  const n = Math.max(linesZh.length, linesEn.length);
+  if (n === 0) return [];
+  const out: { name_zh: string; name_en: string }[] = [];
+  const fallbackLetter = (i: number) => {
+    if (i < 26) return String.fromCharCode(65 + i);
+    return String(i - 25);
+  };
+  for (let i = 0; i < n; i++) {
+    out.push({
+      name_zh: linesZh[i] || `${fallbackLetter(i)} 场`,
+      name_en: linesEn[i] || `Court ${fallbackLetter(i)}`,
+    });
+  }
+  return out;
 }
