@@ -148,3 +148,30 @@ export function Banner({ tone = "info", children }: { tone?: "info" | "warn" | "
   }[tone];
   return <div className={clsx("rounded-md border px-3 py-2 text-sm", tones)}>{children}</div>;
 }
+
+// ---------- IG 风格统计卡（admin/owner 看板复用） ----------
+// PRD §US-207 / §US-303；保持 IG 设计系统（白底 + 圆角 + 渐变 stripe 风格由父容器决定）
+export function StatCard({
+  label,
+  value,
+  hint,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  icon?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-canvas-200 bg-white p-4 shadow-softSm transition hover:-translate-y-0.5 hover:shadow-soft">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="ig-eyebrow text-ink-500">{label}</p>
+          <p className="mt-1 font-display text-2xl text-ink-800">{value}</p>
+          {hint && <p className="mt-0.5 text-[11px] text-ink-500">{hint}</p>}
+        </div>
+        {icon && <div className="shrink-0 text-2xl opacity-80" aria-hidden>{icon}</div>}
+      </div>
+    </div>
+  );
+}

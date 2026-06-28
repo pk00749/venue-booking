@@ -25,6 +25,7 @@ import {
   AdminOwnerAppsPage,
   AdminSensitiveWordsPage,
   AdminPendingBookingsPage,
+  AdminAuditLogsPage,
 } from "@/pages/AdminPages";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -129,6 +130,14 @@ export default function App() {
           element={
             <RequireRole role="admin">
               <AdminPendingBookingsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/admin/audit-logs"
+          element={
+            <RequireRole role="admin">
+              <AdminAuditLogsPage />
             </RequireRole>
           }
         />

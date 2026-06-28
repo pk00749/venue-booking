@@ -53,7 +53,11 @@ export interface Venue {
   ownerId: string;
   name: string;
   sportType: SportType;
-  address: string;
+  // —— 结构化地址（替代旧 address text，PRD §US-203）——
+  provinceCode: string;   // GB/T 2260 省级代码，如 "310000"
+  cityCode: string;       // 市级代码，如 "310100"
+  districtCode: string;   // 区/县级代码，如 "310115"
+  addressDetail: string;  // 街道门牌等详细地址
   description: string;
   images: string[];
   openTimeStart: string; // "08:00"
@@ -62,6 +66,10 @@ export interface Venue {
   requireApproval: boolean;
   cancelHours: number;
   basePriceCents: number;
+  // —— amenities：场馆特性清单（PRD §US-208）——
+  // 元素格式：`preset:<key>` 或 `custom:<label>`
+  // preset 取值见 AMENITY_PRESETS
+  amenities: string[];
   status: "active" | "inactive";
   createdAt: string;
   // —— v2 mock 增量字段 ——
@@ -79,6 +87,8 @@ export interface Court {
   name_en: string;         // 英文显示名（"Court A" / "Court 1"）
   sortOrder: number;       // 列表/选择时的稳定排序
   capacity: number;        // 单场地容纳人数（拼场容量；不是预订占位）
+  priceCents: number;      // 单片场地小时价；0 = 沿用 venue.basePriceCents（PRD §US-203b）
+  notes?: string;          // 单片场地备注（"靠窗 / 有空调"）
   isActive: boolean;       // 软停用；停用后该 court 不再展示
   createdAt: string;
 }
@@ -102,6 +112,43 @@ export interface Slot {
   capacity: number;          // 本场总容纳
   confirmedCount: number;    // 已确认参加人数
 }
+
+// —— 时段模板（PRD §US-205 扩展）——
+// 描述"周内某天 / 每天，时段窗口 [timeStart, timeEnd) 内开放哪几片场"
+export interface SlotTemplate {
+  id: string;
+  venueId: string;
+  dayOfWeek: number | null;  // 0-6 (Sun-Sat)，null = 每天
+  timeStart: string;         // "08:00"
+  timeEnd: string;           // "09:00"
+  courtIds: string[];        // 该窗口内开放的场地 ID 列表
+  slotDurationMinutes?: 30 | 60 | 90 | 120; // 可选覆盖；缺省沿用 venue.slotDurationMinutes
+  createdAt: string;
+}
+
+// amenities 预设 key 常量（PRD §US-208）
+export const AMENITY_PRESETS = [
+  "concession",         // 小卖部
+  "restroom",           // 洗手间
+  "equipment_rental",   // 运动器材出租
+  "shower",             // 淋浴间
+  "parking",            // 停车位
+  "locker",             // 储物柜
+  "wifi",               // Wi-Fi
+  "changing_room",      // 更衣室
+] as const;
+export type AmenityPreset = typeof AMENITY_PRESETS[number];
+
+// amenities 元素格式辅助
+export const AMENITY_PRESET_PREFIX = "preset:" as const;
+export const AMENITY_CUSTOM_PREFIX = "custom:" as const;
+export const isPresetAmenity = (s: string): s is `${typeof AMENITY_PRESET_PREFIX}${AmenityPreset}` =>
+  s.startsWith(AMENITY_PRESET_PREFIX) &&
+  (AMENITY_PRESETS as readonly string[]).includes(s.slice(AMENITY_PRESET_PREFIX.length));
+export const isCustomAmenity = (s: string): s is `${typeof AMENITY_CUSTOM_PREFIX}${string}` =>
+  s.startsWith(AMENITY_CUSTOM_PREFIX) && s.length > AMENITY_CUSTOM_PREFIX.length;
+export const presetAmenityKey = (k: AmenityPreset): string => `${AMENITY_PRESET_PREFIX}${k}`;
+export const customAmenityKey = (label: string): string => `${AMENITY_CUSTOM_PREFIX}${label.trim()}`;
 
 export interface BookingServiceLine {
   serviceId: string;
@@ -164,7 +211,14 @@ export interface SensitiveWord {
 
 export interface AuditLog {
   id: string;
-  actorId?: string;
+  actorId: string;
+  actorRole: "admin" | "owner";
+  // 已知动作（与 PRD §4.4 对齐）：
+  //   review_owner_app · review_booking
+  //   word_add · word_update · word_toggle · word_delete · word_bulk_import
+  //   venue_update · venue_set_status
+  //   admin_role_change
+  // 留 string 方便后续扩展，但 UI 渲染时通过 t(`admin.action.${log.action}`) 双语化
   action: string;
   targetType: string;
   targetId: string;

@@ -194,16 +194,37 @@
 - 拒绝：附拒绝原因，可重新提交
 
 #### US-203 创建场地（P0）
-- 字段：名称、运动类型、详细地址（文字）、图片（≤ 6 张）、营业时间、时段长度（30/60/90/120 分钟）、是否需审核、取消窗口小时数、起价
+- 字段：
+  - 名称、运动类型、**结构化地址（省/市/区 + 详细地址）**、图片（≤ 6 张）、营业时间、时段长度（30/60/90/120 分钟）、是否需审核、取消窗口小时数、起价
+  - **便利设施 amenities**（多选预设 + 自定义）：小卖部、洗手间、运动器材出租、淋浴间、停车位、更衣室、Wi-Fi、储物柜
 - 提交后 `status = 'active'`，立即对外可见
+- 区域数据源：v0.2 前端 bundle 静态 JSON（取自国家统计局公开数据），Supabase 接入后改放 Storage / 维护 npm 包
+
+#### US-203a 编辑 / 下架场地（P0）
+- 字段同 US-203；可独立调整 `status = 'inactive'` 实现下架
+- 下架后该 venue 在公开列表不可见，但历史预订仍可见（用户/场主/管理员三方）
+
+#### US-203b 编辑场地（court）子项（P0）
+- 单片场地字段：中文名 / 英文名 / 排序 / **小时单价（覆盖 venue.basePriceCents）** / **容量（覆盖 venue.capacity）** / **备注** / 软停用开关
+- 价格优先级：`slot → court.priceCents → venue.basePriceCents`
+- 容量展示用，与预订占位无关
 
 #### US-204 维护附加服务（P1）
-- 单个场地下挂多个服务项（名称、单价、是否必选）
+- 单个场地下挂多个服务项（名称、单价、是否必选）—— 此处的"服务"指**付费加项**（球拍租赁、电子记分等），与 US-203 的 amenities（场地特性，免费、信息展示）是两个独立概念
 - 预订时与场地一起被勾选
 
-#### US-205 维护时段模板（P1）
-- 简化方案：仅配置"开/闭时段 + 时段长度"，系统按日自动展开
-- 不做节假日/特殊日历（P2 议）
+#### US-205 维护时段模板（P1，扩展）
+- **基础**：`openTimeStart / openTimeEnd / slotDurationMinutes`，系统按日展开
+- **按周模板**（新增）：owner 可配置一组 `SlotTemplate(venueId, dayOfWeek, timeStart, timeEnd, courtIds[])`，描述"周内某天 / 每天，时段窗口内开放哪几片场"
+  - 例：`8:00–9:00 仅 B 场`、`9:00–12:00 A+B 场`、`周六全天仅 A+C 场`
+- 系统按模板 + 日期 → 自动展开为 (court × slot)；同 (court, startsAt) 唯一
+- **滚动续期**：每次查询 / 创建预订前检查 7 天内 slot 库存；缺则触发 `regenerateSlotsForRange(venueId, fromDate, toDate)`
+- 不做节假日 / 特殊日历（P2 议）；不做模板继承 / 跨场馆复制（P2 议）
+
+#### US-208 维护便利设施 amenities（P0，US-203 子项）
+- 预设清单 8 项：concession / restroom / equipment_rental / shower / parking / locker / wifi / changing_room
+- 自由添加自定义 amenity（`custom:<label>` 形式存）
+- 仅在场馆详情页展示，不参与下单计价
 
 #### US-206 审核预订（P0，当 `require_approval = true`）
 - 待审列表：显示用户、时段、联系方式
@@ -325,7 +346,11 @@ audit_logs       (无 FK，记录所有 admin/owner 关键动作)
 | owner_id | uuid FK → profiles.id | |
 | name | text | 场地名 |
 | sport_type | text check in ('badminton','basketball','football','tennis','table_tennis','volleyball','other') | |
-| address | text | 文字地址 |
+| province_code | text | 省级行政区划代码（GB/T 2260） |
+| city_code | text | 市级行政区划代码 |
+| district_code | text | 区/县级行政区划代码 |
+| address_detail | text | 街道门牌等详细地址 |
+| address_display | text generated always as (...) | 冗余展示字段：拼接 "省 市 区 detail"（由前端写入层补齐） |
 | description | text | 详细描述 |
 | images | text[] | Storage 路径数组，≤ 6 |
 | open_time_start | time | 每日开 |
@@ -334,9 +359,12 @@ audit_logs       (无 FK，记录所有 admin/owner 关键动作)
 | require_approval | boolean default false | |
 | cancel_hours | int default 2 check (0–168) | |
 | base_price_cents | int default 0 | 以分为单位 |
+| amenities | text[] default '{}' | 元素格式：`preset:<key>` 或 `custom:<label>`；预设 key 见 US-208 |
 | status | text check in ('active','inactive') default 'active' | |
 | created_at | timestamptz default now() | |
 | updated_at | timestamptz default now() | |
+
+> 索引：`(status, sport_type, city_code, district_code)` 复合索引，支撑公开场馆列表筛选。
 
 #### `venue_services`
 | 字段 | 类型 | 说明 |
@@ -356,12 +384,33 @@ audit_logs       (无 FK，记录所有 admin/owner 关键动作)
 | name | text | 场主命名（A 场 / B 场 / Court 1 …）；编号规则由场主决定 |
 | sort_order | int default 0 | 列表/选择时的稳定排序 |
 | capacity | int default 4 check (>0) | 单场可容纳人数（展示用） |
+| price_cents | int default 0 | 单片场地小时价；0 = 沿用 venue.base_price_cents |
+| notes | text nullable | 单片场地的备注（"靠窗 / 有空调"等），前端可空 |
 | is_active | boolean default true | 软停用；停用后该 court 不再展示 |
 | created_at | timestamptz default now() | |
 | updated_at | timestamptz default now() | trigger 维护 |
 
 > 设计要点：`capacity` 是场地物性（"这片场最多能打 4 人"），不是预订占位计数。
 > `is_active = false` 时该 court 的 slot 仍存在但不出现在前端选择。
+
+价格解析优先级：`effective_price_cents = court.price_cents > 0 ? court.price_cents : venue.base_price_cents`；前端渲染和下单计费统一走此规则。
+
+#### `slot_templates`
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | uuid PK | |
+| venue_id | uuid FK → venues.id on delete cascade | |
+| day_of_week | smallint check in (0..6) nullable | null = 每天；0 = 周日，6 = 周六 |
+| time_start | time | 窗口起；闭区间用同列 `time_end` |
+| time_end | time | 窗口止（不含） |
+| court_ids | uuid[] | 该窗口内开放的场地 ID 列表 |
+| slot_duration_minutes | smallint nullable | 可选覆盖；null = 沿用 venue.slot_duration_minutes |
+| created_at | timestamptz default now() | |
+| updated_at | timestamptz default now() | trigger 维护 |
+
+展开规则：对每个目标日期，按所有模板 (day_of_week 匹配) ∪ (day_of_week is null)，在 [time_start, time_end) 内按 slot_duration_minutes 切片，对每个 court_id 生成 slot；同 (court_id, starts_at) 唯一。
+
+滚动续期：Edge Function / pg_cron 每日凌晨跑一遍 `regenerate_slots(venue_id, today+7, today+30)`；前端查询时若发现目标日期无 slot，按需 lazy 触发。
 
 #### `slots`
 | 字段 | 类型 | 说明 |
@@ -477,6 +526,10 @@ audit_logs       (无 FK，记录所有 admin/owner 关键动作)
 - `SELECT`：所有人
 - `UPDATE`：仅 Edge Function 用 service_role；普通用户不直改
 - `INSERT/DELETE`：仅 service_role 或 owner（自己场地）
+
+### 6.4a `slot_templates`
+- `SELECT`：所有人可看 `venues.status = 'active'` 的模板；owner 可看自己场馆的全部；admin 可看全部
+- `INSERT/UPDATE/DELETE`：仅 `venues.owner_id = auth.uid()` 或 admin
 
 ### 6.5 `bookings`
 - `SELECT`：`user_id = auth.uid()` 或 `venue.owner_id = auth.uid()` 或 admin

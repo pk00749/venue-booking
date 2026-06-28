@@ -12,11 +12,18 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
 import { addDays, format, isToday, isTomorrow } from "date-fns";
-import { getVenue, listCourts, listSessions, listVenueServices, type Session } from "@/features/venues/api";
+import { getVenue, listCourts, listSessions, listVenueServices, venueAddress, type Session } from "@/features/venues/api";
 import { EmptyState, Skeleton } from "@/components/ui";
 import { useUi } from "@/lib/store";
 import { formatCourtName, formatMoney } from "@/lib/format";
 import type { Court, SportType, Venue } from "@/lib/types";
+import {
+  AMENITY_CUSTOM_PREFIX,
+  AMENITY_PRESET_PREFIX,
+  isCustomAmenity,
+  isPresetAmenity,
+} from "@/lib/types";
+import { AMENITY_PRESETS_META } from "@/lib/amenities";
 import clsx from "clsx";
 
 type Visual = { emoji: string; light: string; glow: string; mono: string; ring: string; accent: string };
@@ -33,6 +40,7 @@ const SPORT_VISUAL: Record<SportType, Visual> = {
 
 function VenueHeader({ venue, vis }: { venue: Venue; vis: Visual }) {
   const { t } = useTranslation();
+  const locale = useUi((s) => s.locale);
   const priceValid = venue.basePriceCents > 0;
   const idShort = venue.id.replace(/^v_/, "").slice(0, 3).toUpperCase();
 
@@ -79,7 +87,7 @@ function VenueHeader({ venue, vis }: { venue: Venue; vis: Visual }) {
 
         <p className="font-mono text-sm text-ink-500">
           <span className="mr-2 text-ink-400">⌖</span>
-          {venue.address}
+          {venueAddress(venue, locale)}
         </p>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -406,6 +414,31 @@ export function VenueDetailPage() {
     );
   }
 
+  // 已下架 venue：保留 header + 备注做信息可见，预订入口关闭
+  // （PRD §US-203a：下架后公开列表不可见；直访 URL 仍可见，但用户/场主/管理员三方的历史预订仍可查）
+  if (venue.status === "inactive") {
+    return (
+      <div className="space-y-6 pb-20">
+        <VenueHeader venue={venue} vis={SPORT_VISUAL[venue.sportType]} />
+        <div className="rounded-2xl border border-squash bg-squash-light p-5 shadow-softSm sm:p-6">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl" aria-hidden>🛑</span>
+            <div className="min-w-0">
+              <p className="ig-eyebrow text-squash-dark">{t("venueDetail.deactivatedEyebrow")}</p>
+              <h2 className="mt-1 font-display text-xl text-squash-dark">
+                {t("venueDetail.deactivatedTitle")}
+              </h2>
+              <p className="mt-2 text-sm text-squash-dark/90">
+                {t("venueDetail.deactivatedBody")}
+              </p>
+            </div>
+          </div>
+        </div>
+        <NotesBlock notes={venue.notes} />
+      </div>
+    );
+  }
+
   const vis = SPORT_VISUAL[venue.sportType];
   const now = Date.now();
 
@@ -479,6 +512,42 @@ export function VenueDetailPage() {
           </div>
         </div>
       </section>
+
+      {venue.amenities.length > 0 && (
+        <section className="rounded-xl border border-canvas-200 bg-white p-4">
+          <p className="ig-eyebrow">{t("venueDetail.amenities")}</p>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {venue.amenities.map((a) => {
+              if (isPresetAmenity(a)) {
+                const key = a.slice(AMENITY_PRESET_PREFIX.length);
+                const meta = AMENITY_PRESETS_META.find((m) => m.key === key);
+                if (!meta) return null;
+                return (
+                  <li
+                    key={a}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-canvas-200 bg-canvas-50 px-3 py-1.5 text-xs text-ink-700"
+                  >
+                    <span aria-hidden>{meta.icon}</span>
+                    <span>{t(meta.i18nKey)}</span>
+                  </li>
+                );
+              }
+              if (isCustomAmenity(a)) {
+                return (
+                  <li
+                    key={a}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-canvas-200 bg-canvas-50 px-3 py-1.5 text-xs text-ink-700"
+                  >
+                    <span aria-hidden>✨</span>
+                    <span>{a.slice(AMENITY_CUSTOM_PREFIX.length)}</span>
+                  </li>
+                );
+              }
+              return null;
+            })}
+          </ul>
+        </section>
+      )}
 
       {services.length > 0 && (
         <section className="rounded-xl border border-canvas-200 bg-white p-4">

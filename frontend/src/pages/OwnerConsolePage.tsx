@@ -1,18 +1,21 @@
 // 场主控制台 —— IG 风
 //   1) 头：eyebrow + display 标题 + 副标
 //   2) 权限不足：白底锁屏 + 跳首页
-//   3) 我的场馆：白底 card 列表 + 顶部「+ 新建场馆」IG 渐变 chip
+//   3) 我的场馆：白底 card 列表 + 顶部「+ 新建场馆」IG 渐变 chip + 行内「编辑 / 下架 / 重新上架」（PRD §US-203a）
 //   4) 待审预订：白底 card 列表 + 行内 批准（IG 渐变）/ 拒绝（squash-light）
-//   5) CreateVenueForm：inputCls 样式 + select 圆角
+//   5) CreateVenueForm：抽到 features/owner/components/CreateVenueForm.tsx（新建 + 编辑 同一组件）
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useSession, useUi } from "@/lib/store";
-import { createVenue, listCourts, listVenuesByOwner } from "@/features/venues/api";
+import { listVenuesByOwner, listSlotTemplates, listCourts, listVenueServices, setVenueStatus } from "@/features/venues/api";
 import { listPendingBookingsForOwner, reviewBooking } from "@/features/bookings/api";
 import { store } from "@/lib/mock-data";
-import { SPORT_TYPES, type SportType } from "@/lib/types";
+import { CreateVenueForm } from "@/features/owner/components/CreateVenueForm";
 import { formatCourtName, formatDateTime, formatMoney } from "@/lib/format";
+import { shortName } from "@/lib/region";
+import type { SportType, Venue, Court, VenueService, SlotTemplate } from "@/lib/types";
+import { useQueryClient } from "@tanstack/react-query";
 
 const SPORT_LABEL_KEY: Record<SportType, string> = {
   squash: "sport.squash",
@@ -33,20 +36,16 @@ const SPORT_VISUAL: Record<SportType, { emoji: string; light: string; mono: stri
   tennis:      { emoji: "🎾", light: "bg-football-light", mono: "TENNIS",     accent: "text-football-dark" },
   table_tennis:{ emoji: "🏓", light: "bg-hoops-light",    mono: "PING PONG",  accent: "text-hoops-dark"    },
   volleyball:  { emoji: "🏐", light: "bg-football-light", mono: "VOLLEYBALL", accent: "text-football-dark" },
-  other:       { emoji: "🎯", light: "bg-ink-100",        mono: "OTHER",      accent: "text-ink-700"       },
+  other:       { emoji: "🎯", light: "bg-ink-100",        mono: "OTHER",     accent: "text-ink-700"       },
 };
-
-const inputCls =
-  "w-full rounded-xl border border-canvas-200 bg-white px-3.5 py-2.5 text-sm text-ink-800 placeholder-ink-400 transition focus:border-ink-300 focus:outline-none focus:ring-2 focus:ring-ink-200";
-
-const selectCls = inputCls;
 
 export function OwnerConsolePage() {
   const { t } = useTranslation();
   const locale = useUi((s) => s.locale);
   const user = useSession((s) => s.user);
   const qc = useQueryClient();
-  const [showCreate, setShowCreate] = useState(false);
+  // 同时只允许一个表单打开：新建 OR 编辑某一个 venue
+  const [formMode, setFormMode] = useState<{ kind: "create" } | { kind: "edit"; venueId: string } | null>(null);
 
   const { data: myVenues = [], isLoading: vLoading } = useQuery({
     queryKey: ["my-venues", user?.id],
@@ -57,6 +56,25 @@ export function OwnerConsolePage() {
     queryKey: ["owner-pending", user?.id],
     queryFn: () => listPendingBookingsForOwner(user!.id),
     enabled: !!user && user.role === "owner",
+  });
+
+  // 编辑模式：拉取该 venue 的 courts / services / slotTemplates，预填表单
+  const editingVenueId = formMode?.kind === "edit" ? formMode.venueId : null;
+  const editingVenue = editingVenueId ? myVenues.find((v) => v.id === editingVenueId) ?? null : null;
+  const { data: editCourts = [], isLoading: ecLoading } = useQuery<Court[]>({
+    queryKey: ["courts", editingVenueId ?? ""],
+    queryFn: () => listCourts(editingVenueId!),
+    enabled: !!editingVenueId,
+  });
+  const { data: editServices = [] } = useQuery<VenueService[]>({
+    queryKey: ["services", editingVenueId ?? ""],
+    queryFn: () => listVenueServices(editingVenueId!),
+    enabled: !!editingVenueId,
+  });
+  const { data: editTemplates = [] } = useQuery<SlotTemplate[]>({
+    queryKey: ["slot-templates", editingVenueId ?? ""],
+    queryFn: () => listSlotTemplates(editingVenueId!),
+    enabled: !!editingVenueId,
   });
 
   if (!user || user.role !== "owner") {
@@ -78,6 +96,23 @@ export function OwnerConsolePage() {
     );
   }
 
+  const closeForm = () => setFormMode(null);
+  const startCreate = () => setFormMode({ kind: "create" });
+  const startEdit = (venueId: string) => setFormMode({ kind: "edit", venueId });
+
+  const flipStatus = async (venue: Venue, next: "active" | "inactive") => {
+    const msg =
+      next === "inactive"
+        ? t("owner.confirmDeactivate", { name: venue.name })
+        : t("owner.confirmReactivate", { name: venue.name });
+    if (!window.confirm(msg)) return;
+    await setVenueStatus(venue.id, next);
+    qc.invalidateQueries({ queryKey: ["my-venues"] });
+    qc.invalidateQueries({ queryKey: ["venues"] });
+    qc.invalidateQueries({ queryKey: ["venue", venue.id] });
+    qc.invalidateQueries({ queryKey: ["owner-dashboard"] });
+  };
+
   return (
     <div className="space-y-6">
       <header>
@@ -93,10 +128,10 @@ export function OwnerConsolePage() {
             <h2 className="mt-0.5 font-display text-xl text-ink-800">{t("owner.myVenues")}</h2>
           </div>
           <button
-            onClick={() => setShowCreate((v) => !v)}
+            onClick={startCreate}
             className="ig-stripe inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-white shadow-softSm transition hover:-translate-y-0.5"
           >
-            {showCreate ? t("ownerForm.cancel") : `+ ${t("owner.createVenue")}`}
+            {formMode?.kind === "create" ? t("ownerForm.cancel") : `+ ${t("owner.createVenue")}`}
           </button>
         </div>
 
@@ -113,42 +148,86 @@ export function OwnerConsolePage() {
           <ul className="mt-4 divide-y divide-canvas-200">
             {myVenues.map((v) => {
               const vis = SPORT_VISUAL[v.sportType];
+              const isInactive = v.status === "inactive";
               return (
-                <li key={v.id} className="flex items-center justify-between gap-3 py-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-2xl ${vis.light}`}
-                      aria-hidden
-                    >
-                      {vis.emoji}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-ink-800">{v.name}</div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-mono uppercase tracking-wide ${vis.light} ${vis.accent}`}>
-                          {vis.mono}
-                        </span>
-                        <span className="text-xs text-ink-500">{t(SPORT_LABEL_KEY[v.sportType])}</span>
-                        <CourtCountChip venueId={v.id} />
+                <li key={v.id} className="py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-2xl ${vis.light}`}
+                        aria-hidden
+                      >
+                        {vis.emoji}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-sm font-semibold text-ink-800">{v.name}</span>
+                          {isInactive && (
+                            <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-600">
+                              {t("owner.statusInactive")}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-mono uppercase tracking-wide ${vis.light} ${vis.accent}`}>
+                            {vis.mono}
+                          </span>
+                          <span className="text-xs text-ink-500">{t(SPORT_LABEL_KEY[v.sportType])}</span>
+                          <CourtCountChip venueId={v.id} />
+                          <TemplateCountChip venueId={v.id} />
+                        </div>
+                        <div className="mt-1 truncate text-xs text-ink-500">
+                          📍 {shortName(v.cityCode, locale)} · {shortName(v.districtCode, locale)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span className="text-right text-sm text-ink-700">
+                        {v.basePriceCents > 0 ? formatMoney(v.basePriceCents, locale) : t("venues.priceN/A")}
+                        <span className="ml-1 text-xs text-ink-500">/ {t("common.perHour")}</span>
+                      </span>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <button
+                          onClick={() => startEdit(v.id)}
+                          className="rounded-full border border-canvas-200 bg-white px-3 py-1 text-[11px] font-semibold text-ink-700 transition hover:bg-canvas-50"
+                        >
+                          {t("owner.editVenue")}
+                        </button>
+                        {isInactive ? (
+                          <button
+                            onClick={() => flipStatus(v, "active")}
+                            className="rounded-full bg-football-light px-3 py-1 text-[11px] font-semibold text-football-dark transition hover:-translate-y-0.5"
+                          >
+                            {t("owner.reactivateVenue")}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => flipStatus(v, "inactive")}
+                            className="rounded-full border border-squash bg-squash-light px-3 py-1 text-[11px] font-semibold text-squash-dark transition hover:-translate-y-0.5"
+                          >
+                            {t("owner.deactivateVenue")}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
-                  <span className="shrink-0 text-right text-sm text-ink-700">
-                    {v.basePriceCents > 0 ? formatMoney(v.basePriceCents, locale) : t("venues.priceN/A")}
-                    <span className="ml-1 text-xs text-ink-500">/ {t("common.perHour")}</span>
-                  </span>
                 </li>
               );
             })}
           </ul>
         )}
 
-        {showCreate && (
+        {formMode?.kind === "create" && (
+          <CreateVenueForm onDone={closeForm} />
+        )}
+
+        {formMode?.kind === "edit" && editingVenue && !ecLoading && (
           <CreateVenueForm
-            onDone={() => {
-              setShowCreate(false);
-              qc.invalidateQueries({ queryKey: ["my-venues"] });
-            }}
+            initialVenue={editingVenue}
+            initialCourts={editCourts}
+            initialServices={editServices}
+            initialTemplates={editTemplates}
+            onDone={closeForm}
           />
         )}
       </section>
@@ -229,167 +308,7 @@ export function OwnerConsolePage() {
   );
 }
 
-function CreateVenueForm({ onDone }: { onDone: () => void }) {
-  const { t } = useTranslation();
-  const user = useSession((s) => s.user)!;
-  const [name, setName] = useState("");
-  const [sportType, setSportType] = useState<SportType>("badminton");
-  const [address, setAddress] = useState("");
-  const [description, setDescription] = useState("");
-  const [openTimeStart, setOpenTimeStart] = useState("08:00");
-  const [openTimeEnd, setOpenTimeEnd] = useState("22:00");
-  const [slotDuration, setSlotDuration] = useState<30 | 60 | 90 | 120>(60);
-  const [basePrice, setBasePrice] = useState("80");
-  const [courtsZh, setCourtsZh] = useState("A 场\nB 场\nC 场\nD 场");
-  const [courtsEn, setCourtsEn] = useState("Court A\nCourt B\nCourt C\nCourt D");
-  const [err, setErr] = useState<string | null>(null);
-
-  const m = useMutation({
-    mutationFn: () =>
-      createVenue({
-        ownerId: user.id,
-        name,
-        sportType,
-        address,
-        description,
-        openTimeStart,
-        openTimeEnd,
-        slotDurationMinutes: slotDuration,
-        requireApproval: false,
-        cancelHours: 2,
-        basePriceCents: Math.round(Number(basePrice) * 100),
-        capacity: 4,
-        courts: parseCourtInputs(courtsZh, courtsEn),
-      }),
-    onSuccess: (r) => {
-      if (r.ok) onDone();
-      else setErr(t("booking.submitBlocked", { words: r.words.join(", ") }));
-    },
-    onError: () => setErr(t("errors.generic")),
-  });
-
-  return (
-    <div className="mt-5 border-t border-canvas-200 pt-5">
-      <p className="ig-eyebrow text-ink-500">NEW VENUE</p>
-      <h3 className="mt-0.5 font-display text-lg text-ink-800">{t("owner.createVenue")}</h3>
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-          <label className="text-xs font-medium text-ink-600">{t("ownerForm.name")}</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls + " mt-1"} />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-ink-600">{t("ownerForm.sportType")}</label>
-          <select
-            value={sportType}
-            onChange={(e) => setSportType(e.target.value as SportType)}
-            className={selectCls + " mt-1"}
-          >
-            {SPORT_TYPES.map((s) => (
-              <option key={s} value={s}>
-                {t(SPORT_LABEL_KEY[s])}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="sm:col-span-2">
-          <label className="text-xs font-medium text-ink-600">{t("ownerForm.address")}</label>
-          <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputCls + " mt-1"} />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="text-xs font-medium text-ink-600">{t("ownerForm.description")}</label>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} className={inputCls + " mt-1"} />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-ink-600">{t("ownerForm.openStart")}</label>
-          <input
-            type="time"
-            value={openTimeStart}
-            onChange={(e) => setOpenTimeStart(e.target.value)}
-            className={inputCls + " mt-1"}
-          />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-ink-600">{t("ownerForm.openEnd")}</label>
-          <input
-            type="time"
-            value={openTimeEnd}
-            onChange={(e) => setOpenTimeEnd(e.target.value)}
-            className={inputCls + " mt-1"}
-          />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-ink-600">{t("ownerForm.slotDuration")}</label>
-          <select
-            value={slotDuration}
-            onChange={(e) => setSlotDuration(Number(e.target.value) as 30 | 60 | 90 | 120)}
-            className={selectCls + " mt-1"}
-          >
-            <option value="30">30</option>
-            <option value="60">60</option>
-            <option value="90">90</option>
-            <option value="120">120</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-medium text-ink-600">{t("ownerForm.basePrice")}</label>
-          <input
-            type="number"
-            value={basePrice}
-            onChange={(e) => setBasePrice(e.target.value)}
-            className={inputCls + " mt-1"}
-          />
-        </div>
-        <div className="sm:col-span-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="text-xs font-medium text-ink-600">{t("ownerForm.courtNamesZh")}</label>
-            <textarea
-              rows={4}
-              value={courtsZh}
-              onChange={(e) => setCourtsZh(e.target.value)}
-              placeholder={"A 场\nB 场\nC 场\nD 场"}
-              className={inputCls + " mt-1 font-mono"}
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-ink-600">{t("ownerForm.courtNamesEn")}</label>
-            <textarea
-              rows={4}
-              value={courtsEn}
-              onChange={(e) => setCourtsEn(e.target.value)}
-              placeholder={"Court A\nCourt B\nCourt C\nCourt D"}
-              className={inputCls + " mt-1 font-mono"}
-            />
-          </div>
-          <p className="sm:col-span-2 font-mono text-[11px] tracking-wider text-ink-500">
-            {t("ownerForm.courtNamesHint")}
-          </p>
-        </div>
-      </div>
-      {err && (
-        <div className="mt-4 rounded-xl border border-squash bg-squash-light px-3.5 py-2.5 text-sm text-squash-dark">
-          {err}
-        </div>
-      )}
-      <div className="mt-5 flex gap-2">
-        <button
-          onClick={() => m.mutate()}
-          disabled={m.isPending || !name || !address}
-          className="ig-stripe rounded-full px-5 py-2 text-sm font-semibold text-white shadow-softSm transition hover:-translate-y-0.5 disabled:opacity-50"
-        >
-          {t("owner.createVenue")}
-        </button>
-        <button
-          onClick={onDone}
-          className="rounded-full border border-canvas-200 bg-white px-5 py-2 text-sm font-medium text-ink-700 transition hover:bg-canvas-50"
-        >
-          {t("ownerForm.cancel")}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// 列出该场馆的 active court 数（不取 sortOrder 详情，只数片数）
+// 列出该场馆的 active court 数
 function CourtCountChip({ venueId }: { venueId: string }) {
   const { t } = useTranslation();
   const { data: courts = [] } = useQuery({
@@ -405,28 +324,18 @@ function CourtCountChip({ venueId }: { venueId: string }) {
   );
 }
 
-// 把两个 textarea（中文 / 英文，每行一个）按行对齐裁剪成 court 输入
-// 单边缺失的行回退到自动字母（A / B / C…）
-function parseCourtInputs(
-  zh: string,
-  en: string,
-): { name_zh: string; name_en: string }[] {
-  const split = (s: string) =>
-    s.split(/\r?\n/).map((x) => x.trim()).filter((x) => x.length > 0);
-  const linesZh = split(zh);
-  const linesEn = split(en);
-  const n = Math.max(linesZh.length, linesEn.length);
-  if (n === 0) return [];
-  const out: { name_zh: string; name_en: string }[] = [];
-  const fallbackLetter = (i: number) => {
-    if (i < 26) return String.fromCharCode(65 + i);
-    return String(i - 25);
-  };
-  for (let i = 0; i < n; i++) {
-    out.push({
-      name_zh: linesZh[i] || `${fallbackLetter(i)} 场`,
-      name_en: linesEn[i] || `Court ${fallbackLetter(i)}`,
-    });
-  }
-  return out;
+// 时段模板数（owner 控制台概览）
+function TemplateCountChip({ venueId }: { venueId: string }) {
+  const { t } = useTranslation();
+  const { data: templates = [] } = useQuery({
+    queryKey: ["slot-templates", venueId],
+    queryFn: () => listSlotTemplates(venueId),
+    enabled: !!venueId,
+  });
+  if (templates.length === 0) return null;
+  return (
+    <span className="rounded-full border border-canvas-200 bg-canvas-50 px-2 py-0.5 font-mono text-[10px] tracking-wider text-ink-600">
+      {t("owner.templateCount", { n: templates.length })}
+    </span>
+  );
 }

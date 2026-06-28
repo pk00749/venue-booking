@@ -1,6 +1,47 @@
 import { store, newId, nowIso } from "@/lib/mock-data";
 import type { OwnerApplication } from "@/lib/types";
 
+// 场主看板（PRD §US-207）：仅看本场地的运营数据
+// - todayCount：今日（本地时区）"有场要打" 的预订数（按 booking.slotIds 任一 slot.startsAt ∈ today 计数）
+// - completionRate7d / cancelRate7d：按 booking.createdAt 7 日窗口对齐 admin 看板口径
+//   （completed / total、cancelled / total；total = 该窗口内总预订，含 pending/confirmed 等中间态）
+export interface OwnerDashboardStats {
+  todayCount: number;
+  completionRate7d: number; // 0-1
+  cancelRate7d: number; // 0-1
+}
+
+export async function getOwnerDashboardStats(ownerId: string): Promise<OwnerDashboardStats> {
+  const venueIds = new Set(
+    store.venues.filter((v) => v.ownerId === ownerId).map((v) => v.id),
+  );
+  const ownerBookings = store.bookings.filter((b) => venueIds.has(b.venueId));
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const endOfToday = startOfToday + 86400_000;
+  const todayCount = ownerBookings.filter((b) =>
+    b.slotIds.some((sid) => {
+      const sl = store.slots.find((s) => s.id === sid);
+      if (!sl) return false;
+      const t = new Date(sl.startsAt).getTime();
+      return t >= startOfToday && t < endOfToday;
+    }),
+  ).length;
+
+  const since7d = Date.now() - 7 * 86400_000;
+  const recent = ownerBookings.filter((b) => new Date(b.createdAt).getTime() >= since7d);
+  const total = recent.length || 1; // 0 预订时给 1 兜底，比例显示 0.0%
+  const completed = recent.filter((b) => b.status === "completed").length;
+  const cancelled = recent.filter((b) => b.status === "cancelled").length;
+
+  return wait({
+    todayCount,
+    completionRate7d: completed / total,
+    cancelRate7d: cancelled / total,
+  });
+}
+
 const wait = <T,>(v: T, ms = 100): Promise<T> => new Promise((r) => setTimeout(() => r(v), ms));
 
 export interface SubmitOwnerAppInput {

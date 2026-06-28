@@ -107,8 +107,8 @@ export function VenuesPage() {
     queryFn: () =>
       listVenues({
         sportType: sport,
-        city: cityParam || undefined,
-        district: districtParam || undefined,
+        cityCode: cityParam || undefined,
+        districtCode: districtParam || undefined,
         keyword,
       }),
   });
@@ -116,7 +116,7 @@ export function VenuesPage() {
   const cities = useMemo(() => {
     const set = new Set<string>();
     for (const v of sportVenues) {
-      const c = parseCity(v.address);
+      const c = parseCity(v.cityCode);
       if (c) set.add(c);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
@@ -125,8 +125,8 @@ export function VenuesPage() {
   const districts = useMemo(() => {
     const set = new Set<string>();
     for (const v of sportVenues) {
-      if (cityParam && parseCity(v.address) !== cityParam) continue;
-      const d = parseDistrict(v.address);
+      if (cityParam && parseCity(v.cityCode) !== cityParam) continue;
+      const d = parseDistrict(v.districtCode);
       if (d) set.add(d);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
@@ -276,7 +276,7 @@ export function VenuesPage() {
                         {v.name}
                       </h3>
                       <p className="mt-1 text-[13px] text-ink-600 truncate">
-                        {v.address}
+                        {venueAddress(v, locale)}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         <span className="text-[10px] font-mono tracking-[0.18em] text-ink-500 uppercase">
@@ -345,3 +345,4 @@ export function VenuesPage() {
     </div>
   );
 }
+import { venueAddress } from "@/features/venues/api";

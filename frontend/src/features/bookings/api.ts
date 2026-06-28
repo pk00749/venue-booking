@@ -1,6 +1,7 @@
 import { store, newId, nowIso } from "@/lib/mock-data";
 import { checkSensitive } from "@/lib/sensitive";
 import type { Booking, BookingServiceLine } from "@/lib/types";
+import { effectivePriceCents } from "@/features/venues/api";
 
 const wait = <T,>(v: T, ms = 120): Promise<T> => new Promise((r) => setTimeout(() => r(v), ms));
 
@@ -27,8 +28,13 @@ export async function createBooking(input: CreateBookingInput): Promise<{ ok: tr
   if (slots.length !== input.slotIds.length) return { ok: false, reason: "slots_mismatch" };
   if (slots.some((s) => s.status !== "available")) return { ok: false, reason: "slot_taken" };
 
-  // 计算总价
-  let total = venue.basePriceCents * slots.length;
+  // 计算总价 —— 按 court 实际单价（PRD §US-203b：court.priceCents > 0 优先；否则 venue.basePriceCents）
+  const courtById = new Map(store.courts.filter((c) => c.venueId === venue.id).map((c) => [c.id, c]));
+  let total = 0;
+  for (const sl of slots) {
+    const court = courtById.get(sl.courtId) ?? null;
+    total += effectivePriceCents(venue, court);
+  }
   const serviceLines: BookingServiceLine[] = [];
   for (const sel of input.services) {
     const svc = store.services.find((s) => s.id === sel.serviceId && s.venueId === venue.id);
