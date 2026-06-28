@@ -406,14 +406,18 @@ export function CreateVenueForm({
         </div>
       )}
 
-      <div className="flex gap-2 pt-2">
+      {/* 底部操作栏：sticky 跟随滚动至视口底部，匹配 BookingPage / VenueDetailPage 视觉风格 */}
+      <div className="sticky bottom-0 z-10 -mx-5 mt-6 flex flex-wrap items-center gap-2 border-t border-canvas-200 bg-white/95 px-5 py-3 shadow-[0_-2px_18px_rgba(0,0,0,0.06)] backdrop-blur sm:-mx-6 sm:px-6">
+        {err && (
+          <span className="mr-auto text-xs font-medium text-squash-dark">{err}</span>
+        )}
         <button
           type="button"
           onClick={() => m.mutate()}
           disabled={m.isPending || !ready}
           className="ig-stripe rounded-full px-5 py-2 text-sm font-semibold text-white shadow-softSm transition hover:-translate-y-0.5 disabled:opacity-50"
         >
-          {isEdit ? t("ownerForm.saveChanges") : t("owner.createVenue")}
+          {m.isPending ? t("common.loading") : isEdit ? t("ownerForm.saveChanges") : t("owner.createVenue")}
         </button>
         <button
           type="button"
