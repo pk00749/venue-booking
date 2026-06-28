@@ -217,20 +217,42 @@ export function OwnerConsolePage() {
           </ul>
         )}
 
-        {formMode?.kind === "create" && (
-          <CreateVenueForm onDone={closeForm} />
-        )}
-
-        {formMode?.kind === "edit" && editingVenue && !ecLoading && (
-          <CreateVenueForm
-            initialVenue={editingVenue}
-            initialCourts={editCourts}
-            initialServices={editServices}
-            initialTemplates={editTemplates}
-            onDone={closeForm}
-          />
-        )}
       </section>
+
+      {/* 新建 / 编辑场馆 —— 独立 section，跟「我的场馆」「REVIEWS」平级，sticky 操作栏在 section 底部 */}
+      {formMode?.kind === "create" && (
+        <section className="rounded-2xl border border-canvas-200 bg-white p-5 shadow-softSm sm:p-6">
+          <header>
+            <p className="ig-eyebrow text-ink-500">CREATE VENUE</p>
+            <h2 className="mt-0.5 font-display text-xl text-ink-800">{t("owner.createVenue")}</h2>
+            <p className="mt-1 text-xs text-ink-500">{t("ownerForm.subtitle")}</p>
+          </header>
+          <div className="mt-4">
+            <CreateVenueForm onDone={closeForm} />
+          </div>
+        </section>
+      )}
+
+      {formMode?.kind === "edit" && editingVenue && !ecLoading && (
+        <section className="rounded-2xl border border-canvas-200 bg-white p-5 shadow-softSm sm:p-6">
+          <header>
+            <p className="ig-eyebrow text-ink-500">EDIT VENUE</p>
+            <h2 className="mt-0.5 font-display text-xl text-ink-800">
+              {t("ownerForm.sectionEditTitle", { name: editingVenue.name })}
+            </h2>
+            <p className="mt-1 text-xs text-ink-500">{t("ownerForm.subtitle")}</p>
+          </header>
+          <div className="mt-4">
+            <CreateVenueForm
+              initialVenue={editingVenue}
+              initialCourts={editCourts}
+              initialServices={editServices}
+              initialTemplates={editTemplates}
+              onDone={closeForm}
+            />
+          </div>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-canvas-200 bg-white p-5 shadow-softSm sm:p-6">
         <div className="flex items-center justify-between">
