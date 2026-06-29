@@ -1,0 +1,95 @@
+# Supabase project config —— 本地 `supabase start` + 远端 `supabase link` 都吃这个
+# 对应 PRD §11.1 / §11.3 / §11.4：端口、Auth 邮件验证、邮箱模板
+# 部署 staging / production 走 `supabase link --project-ref <ref>`，CI 不动这个文件
+
+project_id = "venue-booking"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+openai_api_key = "env(OPENAI_API_KEY)"
+
+[inbucket]
+enabled = true
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173/**", "https://venue-booking.example.com/**"]
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+secure_password_change = true
+# 默认邮件模板英文；PRD §4.1 要求双语，实际由 Supabase Auth Hook / Edge Function
+# 覆盖 `auth.email.template.*` 注入 zh-CN / en-US 双语版本（migration 阶段不写死）
+
+[auth.email.template.confirmation]
+subject = "Confirm your signup"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.magic_link]
+subject = "Your magic link"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.email_change]
+subject = "Confirm email change"
+content_path = "./supabase/templates/email_change.html"
+
+[auth.sms]
+enable_signup = false
+enable_login = false
+enable_confirmations = false
+# PRD §2.2 明确不做短信通知
+
+[edge_runtime]
+enabled = true
+inspector_port = 8083
+# PRD §7.1 邮件触发点全在 Edge Function 上跑
+
+[analytics]
+enabled = false
+# PRD §10.3 暂不接 Sentry / GA，留给后续
+
+[experimental]
+webhooks = { enabled = true }
+# PRD §7.1 邮件触发的另一种实现路径，先开启 webhook 能力

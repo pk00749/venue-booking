@@ -63,6 +63,8 @@ export function Layout() {
                 </span>
               )}
             </NavLink>
+            {/* 管理员视角：场馆列表是给普通用户 / 场主浏览的，admin 走管理后台处理审核 / 看板 / 词条 / 审计（PRD §8）—— nav 不露出 */}
+            {user?.role !== "admin" && (
             <NavLink to="/venues" className={navClass}>
               {({ isActive }) => (
                 <span className="inline-flex items-center gap-1.5">
@@ -71,6 +73,7 @@ export function Layout() {
                 </span>
               )}
             </NavLink>
+            )}
             {user?.role === "user" && (
               <NavLink to="/my-bookings" className={navClass}>
                 {({ isActive }) => (

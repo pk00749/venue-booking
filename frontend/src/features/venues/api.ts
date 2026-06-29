@@ -32,10 +32,16 @@ export interface VenueFilters {
   cityCode?: string;       // 直辖市：province code；其他：市级 code
   districtCode?: string;
   date?: string; // YYYY-MM-DD; if set, only venues with >=1 free slot on that day
+  // 场主视角：只返回 ownerId === me 的场馆（v0.3.1 owner 角色在 /venues 走"我的场馆"分支）
+  // 与 status='active' 公开列表口径叠加：owner 看不到自己已下架的场馆，去 /owner 控制台看
+  ownerId?: string;
 }
 
 export async function listVenues(filters: VenueFilters = {}): Promise<Venue[]> {
   let rows = store.venues.filter((v) => v.status === "active");
+  if (filters.ownerId) {
+    rows = rows.filter((v) => v.ownerId === filters.ownerId);
+  }
   if (filters.sportType && filters.sportType !== "all") {
     rows = rows.filter((v) => v.sportType === filters.sportType);
   }

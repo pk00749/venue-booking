@@ -7,7 +7,7 @@ import { format, isToday, isTomorrow, addDays } from "date-fns";
 import { listVenues, listNextAvailableDates, parseCity, parseDistrict } from "@/features/venues/api";
 import { EmptyState, Skeleton } from "@/components/ui";
 import { PageBottomBar } from "@/components/PageBottomBar";
-import { useUi } from "@/lib/store";
+import { useSession, useUi } from "@/lib/store";
 import { formatMoney } from "@/lib/format";
 import { SPORT_TYPES, type SportType } from "@/lib/types";
 import clsx from "clsx";
@@ -69,6 +69,13 @@ function dateChipLabel(iso: string, t: (k: string) => string) {
 export function VenuesPage() {
   const { t } = useTranslation();
   const locale = useUi((s) => s.locale);
+  const user = useSession((s) => s.user);
+  // 场主角色：H1 / 副标 / 搜索 / 空态 / 列表过滤都走 owner 视角（"我的场馆"）
+  // —— v0.3.1 PRD §3 owner 入驻申请通过后，owner 在 /venues 只看到自己已过审的场馆
+  const isOwner = user?.role === "owner";
+  // 管理员角色：场馆列表页不适用 —— admin 走 /admin 处理审核 / 看板 / 词条 / 审计
+  // 直接在顶层早返，渲染一个锁屏 + 跳管理后台的 CTA；与 nav 同步隐藏 /venues
+  const isAdmin = user?.role === "admin";
   const [params, setParams] = useSearchParams();
   const sportParam = params.get("sport");
   const sport: SportType | "all" =
@@ -97,19 +104,32 @@ export function VenuesPage() {
   };
 
   // 用于派生筛选选项的「同运动下」完整列表（不含 city / district 过滤）
+  // owner 视角：options 也只来自 ownerId=me 的场馆，避免下拉里出现「选了没结果」的城市
   const { data: sportVenues = [] } = useQuery({
-    queryKey: ["venues.options", sport],
-    queryFn: () => listVenues({ sportType: sport }),
+    queryKey: ["venues.options", sport, isOwner ? user?.id ?? null : null],
+    queryFn: () =>
+      listVenues({
+        sportType: sport,
+        ownerId: isOwner ? user?.id : undefined,
+      }),
   });
 
   const { data: venues = [], isLoading } = useQuery({
-    queryKey: ["venues", sport, cityParam, districtParam, keyword],
+    queryKey: [
+      "venues",
+      sport,
+      cityParam,
+      districtParam,
+      keyword,
+      isOwner ? user?.id ?? null : null,
+    ],
     queryFn: () =>
       listVenues({
         sportType: sport,
         cityCode: cityParam || undefined,
         districtCode: districtParam || undefined,
         keyword,
+        ownerId: isOwner ? user?.id : undefined,
       }),
   });
 
@@ -159,6 +179,28 @@ export function VenuesPage() {
     sport === "all" ? t("venues.allFeatured") : t(`sport.${sport}`);
   const sportEmoji = sport === "all" ? "🏟️" : SPORT_VISUAL[sport].emoji;
   const sportGlow  = sport === "all" ? "ig-stripe" : SPORT_VISUAL[sport].glow;
+  // owner 视角：H1 固定为"我的场馆"；当前 sport 筛选用一个独立 chip 露出，避免误导
+  const pageTitle = isOwner ? t("venues.mineTitle") : sportName;
+  const pageEyebrow = isOwner ? t("venues.mineEyebrow") : (locale === "zh-CN" ? "运动 · 场馆" : "Sport · Venues");
+
+  if (isAdmin) {
+    return (
+      <div className="mx-auto max-w-md">
+        <div className="rounded-2xl border border-canvas-200 bg-white p-8 text-center shadow-softSm">
+          <div className="text-4xl">🛡️</div>
+          <p className="ig-eyebrow mt-3 text-ink-500">{t("venues.adminBlockEyebrow")}</p>
+          <h1 className="mt-1 font-display text-2xl text-ink-800">{t("venues.adminBlockTitle")}</h1>
+          <p className="mt-2 text-sm text-ink-500">{t("venues.adminBlockBody")}</p>
+          <Link
+            to="/admin"
+            className="ig-stripe mt-5 inline-flex items-center justify-center gap-2 rounded-full px-5 py-2 text-sm font-semibold text-white shadow-softSm transition hover:-translate-y-0.5"
+          >
+            {t("venues.adminBlockCta")} <span aria-hidden>→</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-7 pb-24">
@@ -169,12 +211,16 @@ export function VenuesPage() {
             {sportEmoji}
           </div>
           <div>
-            <p className="ig-eyebrow">
-              {locale === "zh-CN" ? "运动 · 场馆" : "Sport · Venues"}
-            </p>
+            <p className="ig-eyebrow">{pageEyebrow}</p>
             <h1 className="font-display text-[40px] font-extrabold leading-none tracking-tighter text-ink-800">
-              {sportName}
+              {pageTitle}
             </h1>
+            {isOwner && sport !== "all" && (
+              <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-canvas-200 px-2.5 py-1 text-[11px] font-semibold text-ink-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-football" />
+                {t("venues.mineSportChip", { sport: sportName })}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 text-[12px] text-ink-500">
@@ -189,7 +235,9 @@ export function VenuesPage() {
         </div>
       </header>
 
-      <p className="max-w-xl text-[14px] text-ink-600">{t("venues.subtitle")}</p>
+      <p className="max-w-xl text-[14px] text-ink-600">
+        {isOwner ? t("venues.mineSubtitle") : t("venues.subtitle")}
+      </p>
 
       {/* 过滤条：城市 / 区县 + 名称搜索（运动由 URL ?sport= 控制） */}
       <div className="flex flex-wrap items-center gap-2 border-y border-ink-300 py-3">
@@ -219,7 +267,11 @@ export function VenuesPage() {
           type="search"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
-          placeholder={t("venues.searchPlaceholder") /* "搜索场馆名称" */}
+          placeholder={
+            isOwner
+              ? t("venues.mineSearch") /* "搜索我的场馆" */
+              : t("venues.searchPlaceholder") /* "搜索名称或地址" */
+          }
           className="ml-auto w-full max-w-xs rounded-full border border-ink-300 bg-canvas-50 px-4 py-1.5 text-[12px] text-ink-800 placeholder:text-ink-500 focus:border-ink-500 focus:outline-none transition"
         />
       </div>
@@ -235,11 +287,27 @@ export function VenuesPage() {
           ))}
         </div>
       ) : venues.length === 0 ? (
-        <EmptyState
-          icon="∅"
-          title={t("venues.emptyTitle")}
-          body={t("venues.emptyBody")}
-        />
+        isOwner ? (
+          <EmptyState
+            icon="🏟️"
+            title={t("venues.mineEmptyTitle")}
+            body={t("venues.mineEmptyBody")}
+            action={
+              <Link
+                to="/owner"
+                className="ig-stripe inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-semibold text-white shadow-softSm transition hover:-translate-y-0.5"
+              >
+                {t("venues.mineEmptyCta")} <span aria-hidden>→</span>
+              </Link>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon="∅"
+            title={t("venues.emptyTitle")}
+            body={t("venues.emptyBody")}
+          />
+        )
       ) : (
         <ul className="grid grid-cols-1 gap-4">
           {venues.map((v) => {
