@@ -70,11 +70,18 @@ export interface Venue {
   // 元素格式：`preset:<key>` 或 `custom:<label>`
   // preset 取值见 AMENITY_PRESETS
   amenities: string[];
-  status: "active" | "inactive";
+  // —— v0.4 场馆生命周期：pending (新提交待审) → active (admin 通过) / inactive (admin 拒绝 / owner 下架)
+  // 参照 PRD §US-203 (改) / §US-203c / §US-203d / §US-306
+  status: "pending" | "active" | "inactive";
   createdAt: string;
   // —— v2 mock 增量字段 ——
   capacity: number;        // 默认单场地容纳人数；具体场地可在 courts[*].capacity 覆盖
   notes?: string;          // 场馆备注（空时 UI 渲染为「无」）
+  // —— v0.4 审核字段 (PRD §US-306 / §US-203d) ——
+  submittedAt?: string;     // owner 提交 / 重新提交时刷新
+  reviewedBy?: string;       // 审核人 (profile id)；对应 Supabase 00001 reviewed_by
+  reviewedAt?: string;       // 审核时间
+  rejectReason?: string;     // 拒绝原因；通过 / 重新提交 时清空
 }
 
 // —— v3：场馆下属的「场地 / court」 ——
@@ -216,7 +223,7 @@ export interface AuditLog {
   // 已知动作（与 PRD §4.4 对齐）：
   //   review_owner_app · review_booking
   //   word_add · word_update · word_toggle · word_delete · word_bulk_import
-  //   venue_update · venue_set_status
+  //   venue_submit · venue_update · venue_set_status · venue_resubmit · venue_approve · venue_reject
   //   admin_role_change
   // 留 string 方便后续扩展，但 UI 渲染时通过 t(`admin.action.${log.action}`) 双语化
   action: string;

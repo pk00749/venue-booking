@@ -3,6 +3,7 @@ import { store, newId, nowIso } from "@/lib/mock-data";
 import { courtLetter } from "@/lib/mock-data";
 import { checkSensitive } from "@/lib/sensitive";
 import { formatAddress, getRegion } from "@/lib/region";
+import { addAuditLog } from "@/features/admin/api";
 import type {
   Court,
   Slot,
@@ -291,12 +292,23 @@ export async function createVenue(input: CreateVenueInput): Promise<{ ok: true; 
     cancelHours: input.cancelHours,
     basePriceCents: input.basePriceCents,
     amenities: input.amenities ?? [],
-    status: "active",
+    // v0.4 (PRD §US-203 改) 新建场馆走 admin 审核，默认 pending；approved → active / rejected → inactive
+    status: "pending",
     createdAt: nowIso(),
+    submittedAt: nowIso(),
     capacity: input.capacity,
     notes: input.notes,
   };
   store.venues.push(v);
+  // 写 audit log：venue_submit (PRD §US-306 配套记录)
+  await addAuditLog({
+    actorId: input.ownerId,
+    actorRole: "owner",
+    action: "venue_submit",
+    targetType: "venues",
+    targetId: v.id,
+    metadata: { name: input.name, sportType: input.sportType },
+  });
   // v3：先建 courts，再为每片 court 生成 slot
   const courtInputs = input.courts && input.courts.length > 0
     ? input.courts
@@ -563,6 +575,31 @@ export async function setVenueStatus(
   const v = store.venues.find((x) => x.id === venueId);
   if (!v) return { ok: false };
   v.status = status;
+  return wait({ ok: true });
+}
+
+// —— PRD §US-203d：owner 重新提交被拒场馆
+// status 从 inactive 变回 pending；清空 reviewed_* / reject_reason；刷新 submitted_at
+export async function resubmitVenue(
+  venueId: string,
+  ownerId: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const v = store.venues.find((x) => x.id === venueId);
+  if (!v) return { ok: false, reason: "not_found" };
+  if (v.ownerId !== ownerId) return { ok: false, reason: "not_owner" };
+  if (v.status !== "inactive") return { ok: false, reason: "not_rejected" };
+  v.status = "pending";
+  v.submittedAt = nowIso();
+  v.reviewedBy = undefined;
+  v.reviewedAt = undefined;
+  v.rejectReason = undefined;
+  await addAuditLog({
+    actorId: ownerId,
+    actorRole: "owner",
+    action: "venue_resubmit",
+    targetType: "venues",
+    targetId: v.id,
+  });
   return wait({ ok: true });
 }
 

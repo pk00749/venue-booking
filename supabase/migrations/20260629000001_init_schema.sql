@@ -75,18 +75,27 @@ create table if not exists public.venues (
   cancel_hours          integer not null default 2 check (cancel_hours between 0 and 168),
   base_price_cents      integer not null default 0 check (base_price_cents >= 0),
   amenities             text[] not null default '{}',    -- 元素格式：'preset:<key>' | 'custom:<label>'
-  status                text not null default 'active' check (status in ('active','inactive')),
+  -- 场馆生命周期：pending (新提交待审) → active (admin 通过) / inactive (admin 拒绝 / owner 主动下架)
+  -- PRD §US-203 (改) / §US-203c / §US-203d / §US-306：v0.4 起新建场馆默认 pending
+  status                text not null default 'pending' check (status in ('pending','active','inactive')),
   capacity              integer not null default 4 check (capacity > 0),
   notes                 text,
+  -- 审核字段 (PRD §US-306 / §US-203d)
+  submitted_at          timestamptz not null default now(),          -- owner 提交 / 重新提交时刷新
+  reviewed_by           uuid references public.profiles(id),         -- admin 审核人
+  reviewed_at           timestamptz,                                 -- admin 审核时间
+  reject_reason         text,                                        -- 拒绝原因；通过时清空
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
   check (open_time_end > open_time_start)
 );
+create index if not exists idx_venues_status_submitted
+  on public.venues(status, submitted_at desc);
 create index if not exists idx_venues_status_sport_city
   on public.venues(status, sport_type, city_code, district_code);
 create index if not exists idx_venues_owner
   on public.venues(owner_id);
-comment on table public.venues is '球馆 / 场地；PRD §US-203 提交即 active 对外可见；§US-203a 走 status=inactive 软删';
+comment on table public.venues is '球馆 / 场地；PRD §US-203 提交后 status=pending 走 §US-306 审核，通过 → active；§US-203a 走 status=inactive 软删；§US-203d 重新提交会刷新 submitted_at 并清空审核字段';
 
 -- =====================================================================
 -- 5. venue_services  (球馆下的附加服务)

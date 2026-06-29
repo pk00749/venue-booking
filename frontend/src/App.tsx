@@ -23,6 +23,7 @@ import { OwnerConsolePage } from "@/pages/OwnerConsolePage";
 import {
   AdminDashboardPage,
   AdminOwnerAppsPage,
+  AdminVenuesPage,
   AdminSensitiveWordsPage,
   AdminPendingBookingsPage,
   AdminAuditLogsPage,
@@ -114,6 +115,14 @@ export default function App() {
           element={
             <RequireRole role="admin">
               <AdminOwnerAppsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/admin/venues"
+          element={
+            <RequireRole role="admin">
+              <AdminVenuesPage />
             </RequireRole>
           }
         />

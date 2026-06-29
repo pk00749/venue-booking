@@ -184,6 +184,10 @@
     "deactivateVenue": "Deactivate",
     "reactivateVenue": "Reactivate",
     "statusInactive": "Inactive",
+    "statusPending": "Pending review",
+    "statusRejected": "Rejected",
+    "resubmit": "Resubmit for review",
+    "resubmitConfirm": "Confirm resubmit for review? Please make sure all information is complete.",
     "confirmDeactivate": "Deactivate \"{{{name}}}\"? It will disappear from public listings.",
     "confirmReactivate": "Reactivate \"{{{name}}}\"?"
   },
@@ -256,15 +260,32 @@
       "word_bulk_import": "Bulk import words",
       "venue_update": "Update venue",
       "venue_set_status": "Set venue status",
+      "venue_submit": "Submit venue",
+      "venue_resubmit": "Resubmit venue",
+      "venue_approve": "Approve venue",
+      "venue_reject": "Reject venue",
       "admin_role_change": "Role change"
     },
     "nav": {
       "dashboard": "Dashboard",
       "owners": "Owners",
+      "venues": "Venues",
       "bookings": "Bookings",
       "words": "Words",
       "audit": "Audit"
-    }
+    },
+    "venuesTitle": "Venue review",
+    "venuesSubtitle": "Review venues created by owners. Approved venues go live immediately.",
+    "venuesTabPending": "Pending",
+    "venuesTabActive": "Approved",
+    "venuesTabRejected": "Rejected",
+    "emptyVenuesTabPending": "No venues pending review",
+    "emptyVenuesTabActive": "No approved venues",
+    "emptyVenuesTabRejected": "No rejected venues",
+    "venueSubmittedAt": "Submitted at",
+    "venueRejectReason": "Reject reason",
+    "venueReasonPrompt": "Enter the rejection reason (owner will see it in /owner console):",
+    "venueAddressHint": "click for full address"
   },
   "ownerApp": {
     "title": "Become an owner",

@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession, useUi } from "@/lib/store";
 import { store } from "@/lib/mock-data";
 import { formatCourtName, formatDateTime } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import {
   listSensitiveWords,
   addSensitiveWord,
@@ -18,6 +19,8 @@ import {
   bulkAddSensitiveWords,
   listAllPendingBookings,
   listAuditLogs,
+  listVenuesByStatus,
+  reviewVenue,
 } from "@/features/admin/api";
 import { dashboardStatsEdge, clearDashboardStatsCache } from "@/lib/edge-functions/dashboard-stats";
 import { listOwnerApps, reviewOwnerApp } from "@/features/owner/api";
@@ -114,6 +117,144 @@ export function AdminDashboardPage() {
               </li>
             ))}
           </ol>
+        )}
+      </section>
+    </div>
+  );
+}
+
+// 5a. AdminVenuesPage —— v0.4 场馆审核 (PRD §US-306)
+//  - pending   = 待审 (新提交 / 重新提交)
+//  - active    = 已通过 (active 状态)
+//  - rejected  = 已拒绝 (inactive + rejectReason 非空)
+// owner 主动下架的 (inactive + 无 rejectReason) 不进 rejected tab，进 "全部" 视角
+type VenueReviewTab = "pending" | "active" | "rejected";
+
+export function AdminVenuesPage() {
+  const { t } = useTranslation();
+  const locale = useUi((s) => s.locale);
+  const qc = useQueryClient();
+  const [tab, setTab] = useState<VenueReviewTab>("pending");
+
+  const { data: venues = [], isLoading } = useQuery({
+    queryKey: ["admin-venues", tab],
+    queryFn: () => listVenuesByStatus(tab === "rejected" ? "inactive" : tab),
+  });
+
+  // rejected tab：只留 admin 拒绝的 (inactive + rejectReason 非空)，剔除 owner 主动下架
+  const filteredVenues = tab === "rejected"
+    ? venues.filter((v) => !!v.rejectReason)
+    : venues;
+
+  return (
+    <div className="space-y-6">
+      <header>
+        <p className="ig-eyebrow text-ink-500">VENUE REVIEW</p>
+        <h1 className="mt-1 font-display text-3xl text-ink-800 sm:text-4xl">{t("admin.venuesTitle")}</h1>
+        <p className="mt-1 text-sm text-ink-500">{t("admin.venuesSubtitle")}</p>
+      </header>
+
+      <AdminTabs />
+
+      <div className="flex flex-wrap gap-2">
+        {(["pending", "active", "rejected"] as const).map((k) => (
+          <button
+            key={k}
+            onClick={() => setTab(k)}
+            className={
+              tab === k
+                ? "ig-stripe rounded-full px-4 py-1.5 text-xs font-semibold text-white shadow-softSm"
+                : "rounded-full border border-canvas-200 bg-white px-4 py-1.5 text-xs font-semibold text-ink-600 transition hover:bg-canvas-50"
+            }
+          >
+            {t(`admin.venuesTab${k.charAt(0).toUpperCase()}${k.slice(1)}`)}
+          </button>
+        ))}
+      </div>
+
+      <section className="rounded-2xl border border-canvas-200 bg-white shadow-softSm">
+        {isLoading ? (
+          <div className="space-y-2 p-5">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-12 animate-pulse rounded-xl bg-canvas-100" />
+            ))}
+          </div>
+        ) : filteredVenues.length === 0 ? (
+          <div className="p-10 text-center">
+            <div className="text-3xl">{tab === "pending" ? "📬" : tab === "rejected" ? "✨" : "🏟️"}</div>
+            <p className="ig-eyebrow mt-2 text-ink-500">EMPTY</p>
+            <p className="mt-1 text-sm font-medium text-ink-700">{t(`admin.emptyVenuesTab${tab.charAt(0).toUpperCase()}${tab.slice(1)}`)}</p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-canvas-200">
+            {filteredVenues.map((v) => {
+              const owner = store.profiles.find((p) => p.id === v.ownerId);
+              const reasonOk = !!v.rejectReason;
+              return (
+                <li key={v.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-semibold text-ink-800">{v.name}</span>
+                        <span className="rounded-full bg-canvas-200 px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider text-ink-600">
+                          {v.sportType}
+                        </span>
+                        {v.status === "inactive" && !reasonOk && (
+                          <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-600">
+                            {t("owner.statusInactive")}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-ink-500 truncate">
+                        📍 {v.addressDetail} · {t("admin.venueAddressHint")}
+                      </div>
+                      <div className="text-xs text-ink-500">
+                        💰 {formatMoney(v.basePriceCents, locale)} / {t("common.perHour")}
+                      </div>
+                      <div className="text-xs text-ink-500">
+                        📅 {t("admin.venueSubmittedAt")}: {v.submittedAt ? formatDateTime(v.submittedAt, locale) : "—"}
+                      </div>
+                      <div className="text-xs text-ink-500">
+                        👤 {owner?.nickname ?? v.ownerId} · {owner?.email ?? "—"}
+                      </div>
+                      {reasonOk && tab === "rejected" && (
+                        <div className="mt-1 text-xs text-squash-dark">
+                          <span className="font-semibold">{t("admin.venueRejectReason")}: </span>
+                          {v.rejectReason}
+                        </div>
+                      )}
+                    </div>
+                    {tab === "pending" && (
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          onClick={() =>
+                            reviewVenue(v.id, "approve").then(() =>
+                              qc.invalidateQueries({ queryKey: ["admin-venues"] }),
+                            )
+                          }
+                          className="ig-stripe rounded-full px-3.5 py-1.5 text-xs font-semibold text-white shadow-softSm transition hover:-translate-y-0.5"
+                        >
+                          {t("admin.approve")}
+                        </button>
+                        <button
+                          onClick={() => {
+                            const r = window.prompt(t("admin.venueReasonPrompt")) ?? "";
+                            if (!r.trim()) return;
+                            reviewVenue(v.id, "reject", r).then(() =>
+                              qc.invalidateQueries({ queryKey: ["admin-venues"] }),
+                            );
+                          }}
+                          className="rounded-full border border-squash bg-squash-light px-3.5 py-1.5 text-xs font-semibold text-squash-dark transition hover:-translate-y-0.5"
+                        >
+                          {t("admin.reject")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
     </div>
@@ -537,11 +678,13 @@ export function AdminPendingBookingsPage() {
 }
 
 // 共享 admin nav：5 个 section 间互跳（US-304 新增 audit-logs）
+// v0.4 (US-306) 新增 venues → 6 个
 function AdminTabs() {
   const { t } = useTranslation();
   const tabs: { to: string; label: string; end?: boolean }[] = [
     { to: "/admin", label: t("admin.nav.dashboard"), end: true },
     { to: "/admin/owners", label: t("admin.nav.owners") },
+    { to: "/admin/venues", label: t("admin.nav.venues") },
     { to: "/admin/bookings", label: t("admin.nav.bookings") },
     { to: "/admin/words", label: t("admin.nav.words") },
     { to: "/admin/audit-logs", label: t("admin.nav.audit") },

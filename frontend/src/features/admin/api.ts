@@ -143,3 +143,81 @@ export async function addAuditLog(entry: Omit<AuditLog, "id" | "createdAt">): Pr
   store.auditLogs.push(log);
   return wait(log);
 }
+
+// =====================================================================
+// v0.4 场馆审核 (PRD §US-306 / §US-203c)
+// =====================================================================
+
+//  按 status 拉场馆 (admin 三个 tab 复用)
+//  - pending   = 待审
+//  - active    = 已通过
+//  - inactive  = 已拒绝 (reject) 或被场主主动下架
+//  按 submittedAt 倒序，最新的在最上面
+export async function listVenuesByStatus(
+  status: "pending" | "active" | "inactive",
+): Promise<Venue[]> {
+  return wait(
+    store.venues
+      .filter((v) => v.status === status)
+      .sort((a, b) => {
+        const ta = a.submittedAt ?? a.createdAt;
+        const tb = b.submittedAt ?? b.createdAt;
+        return ta < tb ? 1 : ta > tb ? -1 : 0;
+      }),
+  );
+}
+
+//  Admin 审核场馆：approve → status=active + 清 reject_reason
+//                  reject  → status=inactive + 写 reject_reason (必填)
+//  同步写 audit_log (action=venue_approve | venue_reject) + 推 store.notification
+//  失败时返回 reason 让 UI 区分
+export async function reviewVenue(
+  venueId: string,
+  action: "approve" | "reject",
+  reason?: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const v = store.venues.find((x) => x.id === venueId);
+  if (!v) return { ok: false, reason: "not_found" };
+  if (v.status !== "pending") return { ok: false, reason: "not_pending" };
+  if (action === "reject" && !reason?.trim()) {
+    return { ok: false, reason: "reason_required" };
+  }
+
+  const now = nowIso();
+  v.reviewedBy = "u_admin";
+  v.reviewedAt = now;
+  if (action === "approve") {
+    v.status = "active";
+    v.rejectReason = undefined;
+  } else {
+    v.status = "inactive";
+    v.rejectReason = reason;
+  }
+
+  await addAuditLog({
+    actorId: "u_admin",
+    actorRole: "admin",
+    action: action === "approve" ? "venue_approve" : "venue_reject",
+    targetType: "venues",
+    targetId: v.id,
+    metadata: action === "reject" ? { reason } : undefined,
+  });
+
+  store.notifications.push({
+    id: newId(),
+    userId: v.ownerId,
+    type: action === "approve" ? "venue.approved" : "venue.rejected",
+    title: action === "approve" ? "场馆已通过审核" : "场馆审核未通过",
+    body: action === "approve"
+      ? `「${v.name}」已通过审核，可对外接单。`
+      : `「${v.name}」未通过：${reason}`,
+    payload: {
+      venueId: v.id,
+      venueName: v.name,
+      ...(action === "reject" && reason ? { rejectReason: reason } : {}),
+    },
+    createdAt: now,
+  });
+
+  return wait({ ok: true });
+}

@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { useSession, useUi } from "@/lib/store";
-import { listVenuesByOwner, listSlotTemplates, listCourts, listVenueServices, setVenueStatus } from "@/features/venues/api";
+import { listVenuesByOwner, listSlotTemplates, listCourts, listVenueServices, setVenueStatus, resubmitVenue } from "@/features/venues/api";
 import { listPendingBookingsForOwner, reviewBooking } from "@/features/bookings/api";
 import { store } from "@/lib/mock-data";
 import { CreateVenueForm } from "@/features/owner/components/CreateVenueForm";
@@ -149,6 +149,8 @@ export function OwnerConsolePage() {
             {myVenues.map((v) => {
               const vis = SPORT_VISUAL[v.sportType];
               const isInactive = v.status === "inactive";
+              const isPending = v.status === "pending";
+              const isRejected = isInactive && !!v.rejectReason;
               return (
                 <li key={v.id} className="py-3">
                   <div className="flex items-center justify-between gap-3">
@@ -162,7 +164,17 @@ export function OwnerConsolePage() {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="truncate text-sm font-semibold text-ink-800">{v.name}</span>
-                          {isInactive && (
+                          {isPending && (
+                            <span className="rounded-full bg-hoops-light px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-hoops-dark">
+                              {t("owner.statusPending")}
+                            </span>
+                          )}
+                          {isRejected && (
+                            <span className="rounded-full bg-squash-light px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-squash-dark">
+                              {t("owner.statusRejected")}
+                            </span>
+                          )}
+                          {isInactive && !isRejected && (
                             <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-600">
                               {t("owner.statusInactive")}
                             </span>
@@ -179,6 +191,12 @@ export function OwnerConsolePage() {
                         <div className="mt-1 truncate text-xs text-ink-500">
                           📍 {shortName(v.cityCode, locale)} · {shortName(v.districtCode, locale)}
                         </div>
+                        {isRejected && v.rejectReason && (
+                          <div className="mt-1 text-xs text-squash-dark">
+                            <span className="font-semibold">{t("owner.rejectReason")}: </span>
+                            {v.rejectReason}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
@@ -193,7 +211,21 @@ export function OwnerConsolePage() {
                         >
                           {t("owner.editVenue")}
                         </button>
-                        {isInactive ? (
+                        {isRejected ? (
+                          <button
+                            onClick={async () => {
+                              if (!user) return;
+                              if (!window.confirm(t("owner.resubmitConfirm"))) return;
+                              await resubmitVenue(v.id, user.id);
+                              qc.invalidateQueries({ queryKey: ["my-venues"] });
+                              qc.invalidateQueries({ queryKey: ["venues"] });
+                              qc.invalidateQueries({ queryKey: ["venue", v.id] });
+                            }}
+                            className="rounded-full bg-football-light px-3 py-1 text-[11px] font-semibold text-football-dark transition hover:-translate-y-0.5"
+                          >
+                            {t("owner.resubmit")}
+                          </button>
+                        ) : isInactive ? (
                           <button
                             onClick={() => flipStatus(v, "active")}
                             className="rounded-full bg-football-light px-3 py-1 text-[11px] font-semibold text-football-dark transition hover:-translate-y-0.5"

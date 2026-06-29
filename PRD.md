@@ -106,6 +106,7 @@
 | 创建/编辑自己的场地 | — | — | ✅ | ✅ |
 | 收件箱（站内通知） | — | ✅ | ✅ | ✅ |
 | 审核场主入驻申请 | — | — | — | ✅ |
+| 审核场主新建场馆 | — | — | — | ✅ |
 | 敏感词词库 CRUD | — | — | — | ✅ |
 | 数据看板 | — | — | ✅（仅自己场地） | ✅（全平台） |
 | 审计日志查看 | — | — | — | ✅ |
@@ -197,7 +198,7 @@
 - 字段：
   - 名称、运动类型、**结构化地址（省/市/区 + 详细地址）**、图片（≤ 6 张）、营业时间、时段长度（30/60/90/120 分钟）、是否需审核、取消窗口小时数、起价
   - **便利设施 amenities**（多选预设 + 自定义）：小卖部、洗手间、运动器材出租、淋浴间、停车位、更衣室、Wi-Fi、储物柜
-- 提交后 `status = 'active'`，立即对外可见
+- 提交后 `status = 'pending'`，**待管理员审核（US-306）通过后变 `active` 对外可见**；owner 在审核前可继续编辑字段
 - 区域数据源：v0.2 前端 bundle 静态 JSON（取自国家统计局公开数据），Supabase 接入后改放 Storage / 维护 npm 包
 
 #### US-203a 编辑 / 下架场地（P0）
@@ -208,6 +209,17 @@
 - 单片场地字段：中文名 / 英文名 / 排序 / **小时单价（覆盖 venue.basePriceCents）** / **容量（覆盖 venue.capacity）** / **备注** / 软停用开关
 - 价格优先级：`slot → court.priceCents → venue.basePriceCents`
 - 容量展示用，与预订占位无关
+
+
+#### US-203c 场馆审核结果通知（P0）
+- 邮件 + 站内通知（templates: `venue.approved` / `venue.rejected`）
+- 通过：`venues.status` 升级为 `active`，owner 可对外接单
+- 拒绝：附 `reject_reason` 原因，owner 可修改后重新提交（US-203d）
+
+#### US-203d 重新提交审核（P0）
+- 入口：`/owner` 控制台场馆行「重新提交审核」按钮（场馆当前 `status = 'inactive'` 且 `reject_reason` 非空时显示）
+- 提交后 `status` 变回 `'pending'`，清空 `reviewed_at` / `reviewed_by` / `reject_reason`，`submitted_at` 刷新为 `now()`
+- 触发管理员新一轮审核（US-306）
 
 #### US-204 维护附加服务（P1）
 - 单个场地下挂多个服务项（名称、单价、是否必选）—— 此处的"服务"指**付费加项**（球拍租赁、电子记分等），与 US-203 的 amenities（场地特性，免费、信息展示）是两个独立概念
@@ -256,6 +268,14 @@
 #### US-305 场地下架（P1）
 - 将 `venues.status` 置 `'inactive'`，隐藏公共列表
 - 不删除历史预订
+
+#### US-306 审核场主新建场馆（P0）
+- 入口：`/admin/venues`，`RequireRole role="admin"`
+- 列表：pending / approved / rejected 三 tab（pending 待审，approved / rejected 已审）
+- 字段：场馆名、运动类型、地址、起价、`submitted_at`、owner 邮箱
+- 通过：`venues.status = 'active'` + `reviewed_at` / `reviewed_by` 落库，推 `venue.approved` 通知（US-203c）
+- 拒绝：`venues.status = 'inactive'` + `reject_reason` 非空，推 `venue.rejected` 通知（US-203c）
+- 所有审核动作入 `audit_logs`（`action = 'venue_approve' | 'venue_reject'`）
 
 ### 4.5 平台通用
 
@@ -950,6 +970,14 @@ client.submit(...)
 - 核心逻辑：`listOwnerApps(tab)` + `reviewOwnerApp(id, "approve" | "reject", reason?)` *(v0.2 mock)*
 - 显示信息：tab 切换 + 申请列表（姓名 + 状态 chip + 手机号 + 用户 ID + 批准 / 拒绝按钮）
 
+**12a. `AdminVenuesPage`（`/admin/venues`，`RequireRole role="admin"`）**
+- 鉴权：需 admin 角色
+- 作用：审核场主新建的场馆（PRD §US-306）
+- 关键功能：pending / approved / rejected 三 tab + 行内批准 / 拒绝（拒绝必填原因）
+- 核心逻辑：`listVenuesByStatus(status)` + `reviewVenue(id, "approve" | "reject", reason?)` + `addAuditLog` *(v0.2 mock)*
+- i18n 新增 key：`admin.nav.venues` / `admin.venuesTitle` / `admin.venuesTabPending|Approved|Rejected` / `admin.venueApprove|Reject|ReasonPrompt|SubmittedAt|OwnerEmail` 等
+- 显示信息：tab 切换 + 列表（场馆名 + 运动 mono + 地址 chip + 起价 + 提交时间 + owner 邮箱 + 批准 / 拒绝按钮）
+
 **13. `AdminSensitiveWordsPage`（`/admin/words`，`RequireRole role="admin"`）**
 - 鉴权：需 admin 角色
 - 作用：敏感词词库管理
@@ -999,3 +1027,5 @@ client.submit(...)
 | --- | --- | --- | --- |
 | 2026-06-08 | v0.1.0 | Codex | 初稿，覆盖 10 条已确认决策；待用户评审 |
 | 2026-06-26 | v0.3.0 | Codex | 引入 `courts` 实体；预订流程改为「球馆 → 场次 → 场地」三层；US-103 / §5 / §6.3 / §15.3 同步修订 |
+| 管理员页（Admin） | 4 | `AdminDashboardPage` / `AdminOwnerAppsPage` / `AdminSensitiveWordsPage` / `AdminPendingBookingsPage` |
+| 管理员页（Admin） | 5 | `AdminDashboardPage` / `AdminOwnerAppsPage` / `AdminVenuesPage` / `AdminSensitiveWordsPage` / `AdminPendingBookingsPage` |

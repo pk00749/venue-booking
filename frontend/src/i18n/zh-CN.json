@@ -184,6 +184,10 @@
     "deactivateVenue": "下架",
     "reactivateVenue": "重新上架",
     "statusInactive": "已下架",
+    "statusPending": "审核中",
+    "statusRejected": "已拒绝",
+    "resubmit": "重新提交审核",
+    "resubmitConfirm": "确认重新提交审核？修改后请确保信息完整。",
     "confirmDeactivate": "确认下架「{{{name}}}」？下架后公开列表将不可见。",
     "confirmReactivate": "确认重新上架「{{{name}}}」？"
   },
@@ -256,15 +260,32 @@
       "word_bulk_import": "批量导入敏感词",
       "venue_update": "更新场馆",
       "venue_set_status": "更新场馆状态",
+      "venue_submit": "提交场馆",
+      "venue_resubmit": "重新提交场馆",
+      "venue_approve": "通过场馆审核",
+      "venue_reject": "拒绝场馆审核",
       "admin_role_change": "角色变更"
     },
     "nav": {
       "dashboard": "看板",
       "owners": "场主",
+      "venues": "场馆",
       "bookings": "预订",
       "words": "敏感词",
       "audit": "审计"
-    }
+    },
+    "venuesTitle": "场馆审核",
+    "venuesSubtitle": "审核场主新建的场馆；通过后即可对外接单。",
+    "venuesTabPending": "待审",
+    "venuesTabActive": "已通过",
+    "venuesTabRejected": "已拒绝",
+    "emptyVenuesTabPending": "暂无待审场馆",
+    "emptyVenuesTabActive": "暂无已通过场馆",
+    "emptyVenuesTabRejected": "暂无被拒场馆",
+    "venueSubmittedAt": "提交时间",
+    "venueRejectReason": "拒绝原因",
+    "venueReasonPrompt": "请输入拒绝原因（owner 会在 /owner 控制台看到）：",
+    "venueAddressHint": "按查看完整地址"
   },
   "ownerApp": {
     "title": "成为场主",

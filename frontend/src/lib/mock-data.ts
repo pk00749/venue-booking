@@ -97,8 +97,9 @@ const seedVenues: Venue[] = [
     description: "3 片五人制人工草皮，含夜间灯光；提供分队背心。",
     images: [], openTimeStart: "10:00", openTimeEnd: "22:00",
     slotDurationMinutes: 90, requireApproval: false, cancelHours: 6,
-    basePriceCents: 30000, status: "active", createdAt: now(),
+    basePriceCents: 30000, status: "pending", createdAt: now(),
     capacity: 10, notes: "雨天提前 2 小时短信通知改期。",
+    submittedAt: now(),
     amenities: [presetAmenityKey("restroom"), presetAmenityKey("parking"), presetAmenityKey("equipment_rental"), customAmenityKey("夜间灯光")]
   },
   {
@@ -131,8 +132,12 @@ const seedVenues: Venue[] = [
     description: "12 片标准羽毛球场，PVC 运动地板，全场 LED 灯光。",
     images: [], openTimeStart: "08:00", openTimeEnd: "22:00",
     slotDurationMinutes: 60, requireApproval: false, cancelHours: 2,
-    basePriceCents: 8000, status: "active", createdAt: now(),
+    basePriceCents: 8000, status: "inactive", createdAt: now(),
     capacity: 4,
+    submittedAt: now(),
+    reviewedBy: "u_admin",
+    reviewedAt: now(),
+    rejectReason: "缺少营业执照图（PRD §US-201 要求），请补充后重新提交。",
     amenities: [presetAmenityKey("restroom"), presetAmenityKey("equipment_rental"), presetAmenityKey("wifi"), presetAmenityKey("locker")]
   },
   {
