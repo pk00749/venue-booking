@@ -5,13 +5,16 @@
 //   4) 待审预订：白底 card 列表 + 行内 批准（IG 渐变）/ 拒绝（squash-light）
 //   5) CreateVenueForm：抽到 features/owner/components/CreateVenueForm.tsx（新建 + 编辑 同一组件）
 import { useState } from "react";
+import { useRef } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { useSession, useUi } from "@/lib/store";
 import { listVenuesByOwner, listSlotTemplates, listCourts, listVenueServices, setVenueStatus, resubmitVenue } from "@/features/venues/api";
 import { listPendingBookingsForOwner, reviewBooking } from "@/features/bookings/api";
 import { store } from "@/lib/mock-data";
-import { CreateVenueForm } from "@/features/owner/components/CreateVenueForm";
+import { CreateVenueForm, type CreateVenueFormHandle } from "@/features/owner/components/CreateVenueForm";
+import { PageBottomBar } from "@/components/PageBottomBar";
 import { formatCourtName, formatDateTime, formatMoney } from "@/lib/format";
 import { shortName } from "@/lib/region";
 import type { SportType, Venue, Court, VenueService, SlotTemplate } from "@/lib/types";
@@ -46,6 +49,9 @@ export function OwnerConsolePage() {
   const qc = useQueryClient();
   // 同时只允许一个表单打开：新建 OR 编辑某一个 venue
   const [formMode, setFormMode] = useState<{ kind: "create" } | { kind: "edit"; venueId: string } | null>(null);
+  // 表单自身的命令式句柄 + 状态镜像：父级 PageBottomBar 用这两个渲染「取消 / 保存」双按钮
+  const formRef = useRef<CreateVenueFormHandle>(null);
+  const [formState, setFormState] = useState<{ isPending: boolean; ready: boolean; isEdit: boolean } | null>(null);
 
   const { data: myVenues = [], isLoading: vLoading } = useQuery({
     queryKey: ["my-venues", user?.id],
@@ -114,7 +120,7 @@ export function OwnerConsolePage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       <header>
         <p className="ig-eyebrow text-ink-500">OWNER CONSOLE</p>
         <h1 className="mt-1 font-display text-3xl text-ink-800 sm:text-4xl">{t("owner.console")}</h1>
@@ -127,12 +133,7 @@ export function OwnerConsolePage() {
             <p className="ig-eyebrow text-ink-500">VENUES · {myVenues.length}</p>
             <h2 className="mt-0.5 font-display text-xl text-ink-800">{t("owner.myVenues")}</h2>
           </div>
-          <button
-            onClick={startCreate}
-            className="ig-stripe inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold text-white shadow-softSm transition hover:-translate-y-0.5"
-          >
-            {formMode?.kind === "create" ? t("ownerForm.cancel") : `+ ${t("owner.createVenue")}`}
-          </button>
+          {/* 「+ 新建场馆」已迁到底部 PageBottomBar，避免重复入口 */}
         </div>
 
         {vLoading ? (
@@ -358,6 +359,31 @@ export function OwnerConsolePage() {
           </ul>
         )}
       </section>
+
+      {/* 底部操作栏：所有页面级操作集中在这里（PRD §15 / AGENTS §6） */}
+      <PageBottomBar
+        leading={
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 rounded-full border border-canvas-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-ink-500 transition hover:border-ink-300 hover:text-ink-800"
+          >
+            <span aria-hidden>←</span> {t("common.backHome")}
+          </Link>
+        }
+        info={t("bottomBar.venuesAndPending", {
+          venues: myVenues.length,
+          pending: pending.length,
+        })}
+        trailing={
+          <button
+            type="button"
+            onClick={formMode ? closeForm : startCreate}
+            className="ig-stripe inline-flex items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-softSm transition hover:-translate-y-0.5"
+          >
+            {formMode ? t("ownerForm.cancel") : `+ ${t("bottomBar.createVenue")}`}
+          </button>
+        }
+      />
     </div>
   );
 }

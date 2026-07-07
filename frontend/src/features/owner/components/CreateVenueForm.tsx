@@ -1,7 +1,8 @@
 // 场馆表单（新建 / 编辑）—— PRD §US-203 / §US-203a / §US-203b / §US-205 / §US-208
 // 传入 initialVenue 即进入「编辑模式」：表单字段预填，提交走 updateVenue；
 // 不传则是「新建模式」：表单空，提交走 createVenue。
-import { useMemo, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/lib/store";
@@ -49,15 +50,26 @@ export interface CreateVenueFormProps {
   initialServices?: VenueService[];
   initialTemplates?: SlotTemplate[];
   onDone: () => void;
+  /** 状态同步回调：把 isPending / ready / isEdit 同步给父级，供 PageBottomBar 决定按钮态与文案 */
+  onStateChange?: (state: { isPending: boolean; ready: boolean; isEdit: boolean }) => void;
 }
 
-export function CreateVenueForm({
+/** 暴露给父组件的命令式句柄：父级 PageBottomBar 调 submit() 触发提交 */
+export interface CreateVenueFormHandle {
+  submit: () => void;
+  isPending: boolean;
+  ready: boolean;
+  isEdit: boolean;
+}
+
+export const CreateVenueForm = forwardRef<CreateVenueFormHandle, CreateVenueFormProps>(function CreateVenueForm({
   initialVenue,
   initialCourts,
   initialServices,
   initialTemplates,
   onDone,
-}: CreateVenueFormProps) {
+  onStateChange,
+}: CreateVenueFormProps, ref) {
   const { t } = useTranslation();
   const user = useSession((s) => s.user)!;
   const qc = useQueryClient();
@@ -247,6 +259,26 @@ export function CreateVenueForm({
     !!address.addressDetail &&
     courts.length > 0;
 
+  // 暴露命令式句柄给父级 PageBottomBar：
+  // - submit() 触发提交（mutate）
+  // - isPending / ready / isEdit 供父级按钮态与文案使用
+  useImperativeHandle(
+    ref,
+    () => ({
+      submit: () => m.mutate(),
+      isPending: m.isPending,
+      ready,
+      isEdit,
+    }),
+    [m, ready, isEdit],
+  );
+
+  // 把命令式句柄里那几个会变的字段（isPending / ready）通过回调同步给父级，
+  // 让 PageBottomBar 的 submit 按钮能正确显示「加载中」/「未填完，灰」/「可提交」。
+  useEffect(() => {
+    onStateChange?.({ isPending: m.isPending, ready, isEdit });
+  }, [onStateChange, m.isPending, ready, isEdit]);
+
   return (
     <div className="mt-5 space-y-6 border-t border-canvas-200 pt-5">
       <Section
@@ -406,30 +438,10 @@ export function CreateVenueForm({
         </div>
       )}
 
-      {/* 底部操作栏：sticky 跟随滚动至视口底部，匹配 BookingPage / VenueDetailPage 视觉风格 */}
-      <div className="sticky bottom-0 z-10 -mx-5 mt-6 flex flex-wrap items-center gap-2 border-t border-canvas-200 bg-white/95 px-5 py-3 shadow-[0_-2px_18px_rgba(0,0,0,0.06)] backdrop-blur sm:-mx-6 sm:px-6">
-        {err && (
-          <span className="mr-auto text-xs font-medium text-squash-dark">{err}</span>
-        )}
-        <button
-          type="button"
-          onClick={() => m.mutate()}
-          disabled={m.isPending || !ready}
-          className="ig-stripe rounded-full px-5 py-2 text-sm font-semibold text-white shadow-softSm transition hover:-translate-y-0.5 disabled:opacity-50"
-        >
-          {m.isPending ? t("common.loading") : isEdit ? t("ownerForm.saveChanges") : t("owner.createVenue")}
-        </button>
-        <button
-          type="button"
-          onClick={onDone}
-          className="rounded-full border border-canvas-200 bg-white px-5 py-2 text-sm font-medium text-ink-700 transition hover:bg-canvas-50"
-        >
-          {t("ownerForm.cancel")}
-        </button>
-      </div>
+      {/* 表单自身的 submit / cancel 已上移至父级 PageBottomBar —— 表单仅渲染字段与错误提示 */}
     </div>
   );
-}
+});
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
