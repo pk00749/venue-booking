@@ -1,7 +1,7 @@
 {
-  "buildCommand": "cd frontend && pnpm build",
+  "buildCommand": "cd frontend && corepack pnpm@9.15.9 run build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "cd frontend && pnpm install --frozen-lockfile",
+  "installCommand": "cd frontend && corepack pnpm@9.15.9 install --frozen-lockfile",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
