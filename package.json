@@ -1,0 +1,5 @@
+{
+  "name": "venue-booking",
+  "private": true,
+  "packageManager": "pnpm@9.15.9"
+}

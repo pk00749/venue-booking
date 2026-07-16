@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
+import { beforeAll, beforeEach } from "vitest";
 import zh from "@/i18n/zh-CN.json";
 import en from "@/i18n/en-US.json";
 import { useUi } from "@/lib/store";

@@ -1,7 +1,7 @@
 {
-  "buildCommand": "cd frontend && pnpm install && pnpm build",
+  "buildCommand": "cd frontend && pnpm build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "cd frontend && pnpm install",
+  "installCommand": "cd frontend && pnpm install --frozen-lockfile",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

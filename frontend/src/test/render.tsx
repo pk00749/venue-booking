@@ -5,8 +5,9 @@ import { render, RenderOptions } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nextProvider } from "react-i18next";
 import { MemoryRouter } from "react-router-dom";
-import i18n from "i18n";
-import { useSession, type Profile } from "@/lib/store";
+import i18n from "@/i18n";
+import { useSession } from "@/lib/store";
+import type { Profile } from "@/lib/types";
 
 function makeQueryClient() {
   return new QueryClient({

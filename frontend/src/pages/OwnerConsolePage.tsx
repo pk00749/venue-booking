@@ -5,7 +5,6 @@
 //   4) 待审预订：白底 card 列表 + 行内 批准（IG 渐变）/ 拒绝（squash-light）
 //   5) CreateVenueForm：抽到 features/owner/components/CreateVenueForm.tsx（新建 + 编辑 同一组件）
 import { useState } from "react";
-import { useRef } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
@@ -13,7 +12,7 @@ import { useSession, useUi } from "@/lib/store";
 import { listVenuesByOwner, listSlotTemplates, listCourts, listVenueServices, setVenueStatus, resubmitVenue } from "@/features/venues/api";
 import { listPendingBookingsForOwner, reviewBooking } from "@/features/bookings/api";
 import { store } from "@/lib/mock-data";
-import { CreateVenueForm, type CreateVenueFormHandle } from "@/features/owner/components/CreateVenueForm";
+import { CreateVenueForm } from "@/features/owner/components/CreateVenueForm";
 import { PageBottomBar } from "@/components/PageBottomBar";
 import { formatCourtName, formatDateTime, formatMoney } from "@/lib/format";
 import { shortName } from "@/lib/region";
@@ -49,9 +48,6 @@ export function OwnerConsolePage() {
   const qc = useQueryClient();
   // 同时只允许一个表单打开：新建 OR 编辑某一个 venue
   const [formMode, setFormMode] = useState<{ kind: "create" } | { kind: "edit"; venueId: string } | null>(null);
-  // 表单自身的命令式句柄 + 状态镜像：父级 PageBottomBar 用这两个渲染「取消 / 保存」双按钮
-  const formRef = useRef<CreateVenueFormHandle>(null);
-  const [formState, setFormState] = useState<{ isPending: boolean; ready: boolean; isEdit: boolean } | null>(null);
 
   const { data: myVenues = [], isLoading: vLoading } = useQuery({
     queryKey: ["my-venues", user?.id],
