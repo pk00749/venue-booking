@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { listVenues } from "@/features/venues/api";
 import { useSession, useUi } from "@/lib/store";
 import { FEATURED_SPORTS } from "@/lib/mock-data";
+import { Leaderboard } from "@/features/competition/components";
 import type { SportType } from "@/lib/types";
 import { useMemo } from "react";
 import { format } from "date-fns";
@@ -184,6 +185,15 @@ export function HomePage() {
               03 {locale === "zh-CN" ? "类运动" : "sports"}
             </span>
           </div>
+        </div>
+      </section>
+
+      {/* 运动排行榜（首页 Top 20） */}
+      <section>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+          {FEATURED_SPORTS.map((sport) => (
+            <Leaderboard key={sport} sport={sport as SportType} />
+          ))}
         </div>
       </section>
 

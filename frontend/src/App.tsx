@@ -13,6 +13,7 @@ import { useSession } from "@/lib/store";
 import type { Role } from "@/lib/types";
 
 import { HomePage } from "@/pages/HomePage";
+import { SportProfilePage } from "@/pages/SportProfilePage";
 import { VenuesPage } from "@/pages/VenuesPage";
 import { VenueDetailPage } from "@/pages/VenueDetailPage";
 import { BookingPage } from "@/pages/BookingPage";
@@ -65,6 +66,8 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/venues" element={<VenuesPage />} />
         <Route path="/venues/:id" element={<VenueDetailPage />} />
+        <Route path="/profile" element={<SportProfilePage />} />
+        <Route path="/u/:userId" element={<SportProfilePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
 

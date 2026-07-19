@@ -2,8 +2,8 @@
 
 | 项目代号 | venue-booking v2 |
 | --- | --- |
-| 文档版本 | v0.1.0（待评审） |
-| 文档日期 | 2026-06-08 |
+| 文档版本 | v0.4.0（v0.3 + 竞赛 / 等级 / 排行榜） |
+| 文档日期 | 2026-07-18 |
 | 文档作者 | Codex (协作生成) |
 | 评审状态 | ⏳ 等待产品/技术确认 |
 | 目标 MVP 周期 | 6–8 周（按里程碑 P0–P5 推进） |
@@ -276,6 +276,82 @@
 - 通过：`venues.status = 'active'` + `reviewed_at` / `reviewed_by` 落库，推 `venue.approved` 通知（US-203c）
 - 拒绝：`venues.status = 'inactive'` + `reject_reason` 非空，推 `venue.rejected` 通知（US-203c）
 - 所有审核动作入 `audit_logs`（`action = 'venue_approve' | 'venue_reject'`）
+
+
+
+### 4.6 运动竞赛 + 等级 + 排行榜（feature.md 衍生）
+
+> 详细规则、数据模型、指标见仓库根目录 `feature.md`；本节给出 PRD 视角的 US 与里程碑对齐。
+
+#### US-501 开启竞赛模式（P1，feature）
+- 入口：`/my-bookings` → 「我的预订」详情 → 「开启竞赛」按钮（仅当 `bookings.status = confirmed` 且 `starts_at > now + 30min` 时显示）。
+- 字段：比赛类型（友谊 / 排位）、比赛模式（`1v1` / 双队）、每队人数（团队模式下 `1..floor(court.capacity / 2)`）、公开 / 私密。
+- 提交：Edge Function `createCompetition` → `competitions.status = 'recruiting'`，creator 自动加入 A 队。
+- 业务规则：v2 不接支付，加入者仅参赛不重订，原预订仍是联系人。
+
+#### US-502 申请加入竞赛（P1，feature）
+- 入口：场馆详情「竞赛场次」chip → 「申请加入」按钮；选队后提交。
+- 业务规则：同一用户同一竞赛不可重复申请；满员不可加入；冷却中对手（同 `participant_set_hash` 7 天内已结算）不可重复加入。
+- 提交：Edge Function `applyToCompetition` → `competition_participants.status = 'pending'`。
+
+#### US-503 创建者审核申请（P1，feature）
+- 入口：`/my-bookings` → 竞赛管理 tab；行内接受 / 拒绝。
+- 提交：Edge Function `reviewApplication`；接受 → `status = 'accepted'`，拒绝 → `status = 'rejected'`；锁定后不可改。
+
+#### US-504 名单自动锁定（P1，feature，cron）
+- pg_cron 每分钟执行 `lockRoster`：距开场 ≤ 30 分钟仍未满员的竞赛置 `status = 'voided'`，正常满员置 `status = 'locked'`，写 `participant_set_hash`。
+
+#### US-505 提交比赛结果（P1，feature）
+- 入口：`/my-bookings` → 竞赛管理；比赛结束后 7 天内任一参赛者可提交。
+- 字段：按 `sport_type` 选择结构化 `score_payload`（羽毛 / 壁球 / 网球 `sets`，足球 `goals`，篮球 `total_points`）；胜者由 payload 推导，禁止手填。
+- 提交：Edge Function `submitResult` → `competition_results.status = 'awaiting_responses'`，`expires_at = submitted_at + 24h`。
+
+#### US-506 参赛者确认 / 异议（P1，feature）
+- 入口：`/my-bookings` → 竞赛管理 → 结果卡片。
+- 行为：24 小时内确认或附理由异议；全部提前确认可提前进入待审；超时视为无异议。
+
+#### US-507 场主审核结果（P1，feature）
+- 入口：场主控制台 `/owner` → 「待审结果」tab。
+- 行为：通过 → 服务端事务写入 XP / Rating；驳回 → 状态置 `rejected`，允许发起人在 7 天总窗口内重提。
+- 冲突：场主本人参赛、是发起人或存在账号冲突时自动转管理员；场主 72 小时未处理自动升级。
+
+#### US-508 管理员冲突审核与人工撤销（P1，feature）
+- 入口：`/admin` → 「竞赛冲突」tab；可处理转审、撤销违规结算（30 天内）、重置结果。
+
+#### US-509 运动等级与 XP（P1，feature）
+- 新用户：所有运动初始化 `Level 1 / 0 XP / Rating 1000`。
+- 经验档位见 `feature.md §4.1`；等级只升不降；服务端事务一次性写入并留流水。
+- 团队赛按对方锁定阵容平均等级计算；作废 / 弃权 / 取消 = 0 XP，到场奖励 10 XP。
+
+#### US-510 竞技分 + Elo 结算（P1，feature）
+- 排位赛按 Elo：`ΔR = K × (S - E)`，`K` 60 / 40 / 25 / 15；友谊赛不动 Rating。
+- 7 天衰减：同一 `participant_set_hash` 第 3 场起 XP × 0.5 / Rating × 0.5，第 ≥4 场 XP × 0.2 / Rating 0。
+- 5 场定位赛前显示「定位中」，不入竞技榜。
+
+#### US-511 12 周赛季与软重置（P1，feature）
+- 赛季长度 12 周；XP 与等级永久保留，竞技分按 `1000 + 0.75 × (R - 1000)` 软重置。
+- 结算生成赛季段位徽章并写入 `competition_seasons`，管理员看板展示。
+
+#### US-512 首页运动排行榜（P1，feature）
+- 入口：首页 `/` 在 hero 与运动卡之间插入「运动排行榜」。
+- 默认按系统最活跃运动展示竞技榜 Top 20，可切「成长榜」；查看完整榜走 cursor 分页。
+- 仅展示去重昵称、头像、等级、段位、胜 / 平 / 负 / 场次，禁止 PII。
+
+#### US-513 个人运动档案（P1，feature）
+- 入口：`/u/:id?sport=<sport>`，或「我的」页签。
+- 显示：当前等级 / 段位 / Rating / XP、当前段位徽章、近期 N 场战绩、胜率、不同对手数、最佳连胜、历史段位。
+
+#### US-514 站内通知（P1，feature）
+- 覆盖：申请结果、名单锁定、结果待确认、异议、审核结论、经验到账、升级、段位变化、赛季结算。
+- 不开邮件推送；新触发点入 `notifications` 表（§7.1 现有模板表）。
+
+#### US-515 反作弊与护栏（P1，feature）
+- 同一对阵衰减、爽约计数 + 排位暂停、冲突转审、审计日志、风控命中标记。
+- 服务端事务保证幂等（`experience_ledger.idempotency_key`）。
+
+#### US-516 指标看板（P1，feature）
+- `feature.md §9` 的 WVCU / 漏斗 / 粘性 / 竞技质量 / 护栏作为管理员看板的新分块，叠加在现有 §8.1 之上。
+- 全部按运动、赛季、比赛类型、新老用户和 `1v1 / 团队赛` 分组；样本 < 20 不展示百分比。
 
 ### 4.5 平台通用
 
@@ -802,6 +878,8 @@ client.submit(...)
 
 > 实际周期按团队节奏 ±1 周浮动。
 
+| **P6 — 竞赛 + 等级 + 排行榜** | W7 | US-501..US-516、competition_seasons / user_sport_progress / competitions / competition_participants / competition_results / experience_ledger、Edge Functions `createCompetition` / `applyToCompetition` / `reviewApplication` / `submitResult` / `respondToResult` / `reviewResult` / `getLeaderboard` / `getSportProfile` / `lockRoster`、首页榜单、个人档案、指标看板 | 端到端：开启竞赛 → 申请 → 审核 → 提交 → 确认 → 审核 → XP/Rating 写入 → 榜单可见；`supabase db reset` 通过；RLS 测试通过；首赛季漏斗指标 30 日达标 |
+
 ---
 
 ## 13. 风险与开放问题
@@ -1027,5 +1105,6 @@ client.submit(...)
 | --- | --- | --- | --- |
 | 2026-06-08 | v0.1.0 | Codex | 初稿，覆盖 10 条已确认决策；待用户评审 |
 | 2026-06-26 | v0.3.0 | Codex | 引入 `courts` 实体；预订流程改为「球馆 → 场次 → 场地」三层；US-103 / §5 / §6.3 / §15.3 同步修订 |
+| 2026-07-18 | v0.4.0 | Codex | 同步 `feature.md`：新增 US-501..US-516 竞赛 / 等级 / 排行榜；新增 P6 里程碑；§2.2 非目标保持不变 |
 | 管理员页（Admin） | 4 | `AdminDashboardPage` / `AdminOwnerAppsPage` / `AdminSensitiveWordsPage` / `AdminPendingBookingsPage` |
 | 管理员页（Admin） | 5 | `AdminDashboardPage` / `AdminOwnerAppsPage` / `AdminVenuesPage` / `AdminSensitiveWordsPage` / `AdminPendingBookingsPage` |

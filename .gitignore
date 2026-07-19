@@ -52,3 +52,6 @@ venue-*.png
 venues-*.png
 
 home.png
+
+# local tsc self-check scratch dir
+.check/

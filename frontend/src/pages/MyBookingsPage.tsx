@@ -11,6 +11,7 @@ import { listMyBookings, cancelBooking } from "@/features/bookings/api";
 import { store } from "@/lib/mock-data";
 import { formatCourtName, formatDateTime, formatMoney } from "@/lib/format";
 import type { Booking, SportType } from "@/lib/types";
+import { CreateCompetitionModal } from "@/features/competition/components";
 import clsx from "clsx";
 
 const SPORT_VISUAL: Record<SportType, { emoji: string; light: string; mono: string }> = {
@@ -42,6 +43,7 @@ export function MyBookingsPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<"upcoming" | "history">("upcoming");
   const [msg, setMsg] = useState<{ tone: "success" | "warn" | "danger"; text: string } | null>(null);
+  const [compTarget, setCompTarget] = useState<{ bookingId: string; slotId: string; capacity: number } | null>(null);
 
   const { data: bookings = [], isLoading } = useQuery({
     queryKey: ["my-bookings", user?.id],
@@ -95,6 +97,15 @@ export function MyBookingsPage() {
 
   return (
     <div className="space-y-6">
+      {compTarget && (
+        <CreateCompetitionModal
+          bookingId={compTarget.bookingId}
+          slotId={compTarget.slotId}
+          courtCapacity={compTarget.capacity}
+          open
+          onClose={() => setCompTarget(null)}
+        />
+      )}
       {/* 头 */}
       <div>
         <p className="ig-eyebrow">{t("nav.appName")}</p>
@@ -218,6 +229,19 @@ export function MyBookingsPage() {
                   </div>
                 </div>
 
+                {tab === "upcoming" && b.status === "confirmed" && !compTarget && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sl = store.slots.find(s => s.id === b.slotIds[0]);
+                      const court = sl ? store.courts.find(c => c.id === sl.courtId) : null;
+                      if (sl && court) setCompTarget({ bookingId: b.id, slotId: sl.id, capacity: court.capacity });
+                    }}
+                    className="flex-shrink-0 rounded-full border border-football/40 bg-football-light px-3 py-1.5 font-mono text-[11px] tracking-[0.16em] text-football-dark transition hover:-translate-y-0.5"
+                  >
+                    {t("competition.createButton")}
+                  </button>
+                )}
                 {tab === "upcoming" && b.status !== "cancelled" && (
                   <button
                     onClick={() => {

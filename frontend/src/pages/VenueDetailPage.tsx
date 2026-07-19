@@ -25,6 +25,7 @@ import {
 } from "@/lib/types";
 import { AMENITY_PRESETS_META } from "@/lib/amenities";
 import clsx from "clsx";
+// 竞赛模式：mock 阶段暂无 competitions 数据；Supabase 接入后此处会渲染 CreateCompetitionModal + ApplyButton
 
 type Visual = { emoji: string; light: string; glow: string; mono: string; ring: string; accent: string };
 const SPORT_VISUAL: Record<SportType, Visual> = {
